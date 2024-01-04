@@ -50,8 +50,6 @@ export interface DiagnosticsOptions {
      * The severity of reported comments. If not set, 'DiagnosticsOptions.allowComments' defines whether comments are ignored or reported as errors.
      */
     readonly comments?: SeverityLevel;
-
-    readonly multilineStrings?: SeverityLevel;
 }
 export declare type SeverityLevel = 'error' | 'warning' | 'ignore';
 export interface ModeConfiguration {

@@ -260,7 +260,7 @@ var ValidationResult = /** @class */ (function () {
 export { ValidationResult };
 export function newJSONDocument(root, diagnostics) {
     if (diagnostics === void 0) { diagnostics = []; }
-    return new JSONDocument(root, diagnostics, [], []);
+    return new JSONDocument(root, diagnostics, []);
 }
 export function getNodeValue(node) {
     return Json.getNodeValue(node);
@@ -273,13 +273,12 @@ export function contains(node, offset, includeRightBound) {
     return offset >= node.offset && offset < (node.offset + node.length) || includeRightBound && offset === (node.offset + node.length);
 }
 var JSONDocument = /** @class */ (function () {
-    function JSONDocument(root, syntaxErrors, comments, multilineStrings) {
+    function JSONDocument(root, syntaxErrors, comments) {
         if (syntaxErrors === void 0) { syntaxErrors = []; }
         if (comments === void 0) { comments = []; }
         this.root = root;
         this.syntaxErrors = syntaxErrors;
         this.comments = comments;
-        this.multilineStrings = multilineStrings;
     }
     JSONDocument.prototype.getNodeFromOffset = function (offset, includeRightBound) {
         if (includeRightBound === void 0) { includeRightBound = false; }
@@ -931,17 +930,11 @@ export function parse(textDocument, config) {
     var text = textDocument.getText();
     var scanner = Json.createScanner(text, false);
     var commentRanges = config && config.collectComments ? [] : undefined;
-    var multilineStringRanges = [];
     function _scanNext() {
         while (true) {
             var token_1 = scanner.scan();
             _checkScanError();
             switch (token_1) {
-                case 10 /* StringLiteral */:
-                    if (scanner.getTokenLength() > 3 && text.substring(scanner.getTokenOffset(), scanner.getTokenOffset() + 3) === "\"\"\"") {
-                        multilineStringRanges.push(Range.create(textDocument.positionAt(scanner.getTokenOffset()), textDocument.positionAt(scanner.getTokenOffset() + scanner.getTokenLength())));
-                    }
-                    return token_1;
                 case 12 /* LineCommentTrivia */:
                 case 13 /* BlockCommentTrivia */:
                     if (Array.isArray(commentRanges)) {
@@ -1215,5 +1208,5 @@ export function parse(textDocument, config) {
             _error(localize('End of file expected', 'End of file expected.'), ErrorCode.Undefined);
         }
     }
-    return new JSONDocument(_root, problems, commentRanges, multilineStringRanges);
+    return new JSONDocument(_root, problems, commentRanges);
 }

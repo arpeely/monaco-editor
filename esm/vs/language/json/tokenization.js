@@ -93,13 +93,13 @@ function tokenize(comments, line, state, offsetDelta, stopAtOffset) {
     var adjustOffset = false;
     switch (state.scanError) {
         case 2 /* UnexpectedEndOfString */:
-            line = '"""' + line;
-            numberOfInsertedCharacters = 3;
+            line = '"' + line;
+            numberOfInsertedCharacters = 1;
             break;
         case 1 /* UnexpectedEndOfComment */:
             line = '/*' + line;
             numberOfInsertedCharacters = 2;
-            break;  
+            break;
     }
     var scanner = json.createScanner(line);
     var lastWasColon = state.lastWasColon;
@@ -169,9 +169,7 @@ function tokenize(comments, line, state, offsetDelta, stopAtOffset) {
                 var inArray = currentParent === 1 /* Array */;
                 type =
                     lastWasColon || inArray ? TOKEN_VALUE_STRING : TOKEN_PROPERTY_NAME;
-                if (scanner.getTokenError() != 2) {
-                    lastWasColon = false;
-                }
+                lastWasColon = false;
                 break;
             case 11 /* NumericLiteral */:
                 type = TOKEN_VALUE_NUMBER;

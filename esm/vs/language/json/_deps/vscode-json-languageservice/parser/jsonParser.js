@@ -938,7 +938,7 @@ export function parse(textDocument, config) {
             _checkScanError();
             switch (token_1) {
                 case 10 /* StringLiteral */:
-                    if (scanner.getTokenValue().includes('\n')) {
+                    if (scanner.getTokenLength() > 3 && text.substring(scanner.getTokenOffset(), scanner.getTokenOffset() + 3) === "\"\"\"") {
                         multilineStringRanges.push(Range.create(textDocument.positionAt(scanner.getTokenOffset()), textDocument.positionAt(scanner.getTokenOffset() + scanner.getTokenLength())));
                     }
                     return token_1;

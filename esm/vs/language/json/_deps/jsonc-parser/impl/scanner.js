@@ -180,7 +180,9 @@ export function createScanner(text, ignoreTrivia) {
             }
             pos++;
         }
-
+        if (multiline) {
+            console.log("XXX", pos, lineNumber, tokenLineStartOffset, result);
+        }
         return result;
     }
     function scanNext() {

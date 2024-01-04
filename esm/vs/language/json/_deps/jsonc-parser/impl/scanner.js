@@ -86,23 +86,18 @@ export function createScanner(text, ignoreTrivia) {
         }
         return text.substring(start, end);
     }
-    function scanString(multiline = false) {
+    function scanString() {
         var result = '', start = pos;
         while (true) {
-            if (pos >= len || (multiline && pos >= len-2)) {
-                // TODO check end of string
-                if (multiline) {
-                    pos += 2;
-                }
+            if (pos >= len) {
                 result += text.substring(start, pos);
                 scanError = 2 /* UnexpectedEndOfString */;
                 break;
             }
             var ch = text.charCodeAt(pos);
-            const endOfString = multiline ? ch === 34 /* doubleQuote */ && text.charCodeAt(pos + 1) === 34 && text.charCodeAt(pos + 2) === 34 : ch === 34 /* doubleQuote */;
-            if (endOfString /* doubleQuote */) {
+            if (ch === 34 /* doubleQuote */) {
                 result += text.substring(start, pos);
-                pos+= multiline ? 3 : 1;
+                pos++;
                 break;
             }
             if (ch === 92 /* backslash */) {
@@ -112,7 +107,6 @@ export function createScanner(text, ignoreTrivia) {
                     scanError = 2 /* UnexpectedEndOfString */;
                     break;
                 }
-                // TODO escape character end of line
                 var ch2 = text.charCodeAt(pos++);
                 switch (ch2) {
                     case 34 /* doubleQuote */:
@@ -156,22 +150,9 @@ export function createScanner(text, ignoreTrivia) {
             }
             if (ch >= 0 && ch <= 0x1f) {
                 if (isLineBreak(ch)) {
-                    if (multiline) {
-                        result += text.substring(start, pos);
-                        result += "\n";
-                        pos++;
-                        if (ch === 13 /* carriageReturn */ && text.charCodeAt(pos) === 10 /* lineFeed */) {
-                            pos++;
-                        }
-                        lineNumber++;
-                        tokenLineStartOffset = pos;
-                        start=pos;
-                        continue;
-                    } else {
-                        result += text.substring(start, pos);
-                        scanError = 2 /* UnexpectedEndOfString */;
-                        break;
-                    }
+                    result += text.substring(start, pos);
+                    scanError = 2 /* UnexpectedEndOfString */;
+                    break;
                 }
                 else {
                     scanError = 6 /* InvalidCharacter */;
@@ -180,7 +161,6 @@ export function createScanner(text, ignoreTrivia) {
             }
             pos++;
         }
-
         return result;
     }
     function scanNext() {
@@ -238,9 +218,8 @@ export function createScanner(text, ignoreTrivia) {
                 return token = 5 /* CommaToken */;
             // strings
             case 34 /* doubleQuote */:
-                const multiline = (pos + 2 < len) && text.charCodeAt(pos+1) === 34 && text.charCodeAt(pos+2) === 34;
-                pos += multiline ? 3 : 1;
-                value = scanString(multiline);
+                pos++;
+                value = scanString();
                 return token = 10 /* StringLiteral */;
             // comments
             case 47 /* slash */:

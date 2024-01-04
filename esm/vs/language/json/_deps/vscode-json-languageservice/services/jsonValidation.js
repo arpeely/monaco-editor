@@ -37,6 +37,7 @@ var JSONValidation = /** @class */ (function () {
         var getDiagnostics = function (schema) {
             var trailingCommaSeverity = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.trailingCommas) ? toDiagnosticSeverity(documentSettings.trailingCommas) : DiagnosticSeverity.Error;
             var commentSeverity = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.comments) ? toDiagnosticSeverity(documentSettings.comments) : _this.commentSeverity;
+            var allowMultiline = documentSettings && documentSettings.allowMultilineStrings;
             var schemaValidation = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.schemaValidation) ? toDiagnosticSeverity(documentSettings.schemaValidation) : DiagnosticSeverity.Warning;
             var schemaRequest = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.schemaRequest) ? toDiagnosticSeverity(documentSettings.schemaRequest) : DiagnosticSeverity.Warning;
             if (schema) {
@@ -80,6 +81,13 @@ var JSONValidation = /** @class */ (function () {
                 var message_1 = localize('InvalidCommentToken', 'Comments are not permitted in JSON.');
                 jsonDocument.comments.forEach(function (c) {
                     addProblem(Diagnostic.create(c, message_1, commentSeverity, ErrorCode.CommentNotPermitted));
+                });
+            }
+
+            if (!allowMultiline) {
+                var message_1 = localize('InvalidMultilineString', 'Multiline strings are not permitted in JSON');
+                jsonDocument.multilineStrings.forEach(function (c) {
+                    addProblem(Diagnostic.create(c, message_1, DiagnosticSeverity.Error, ErrorCode.UnexpectedEndOfString));
                 });
             }
             return diagnostics;

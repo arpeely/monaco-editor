@@ -180,9 +180,7 @@ export function createScanner(text, ignoreTrivia) {
             }
             pos++;
         }
-        if (multiline) {
-            console.log("XXX", pos, lineNumber, tokenLineStartOffset, result);
-        }
+
         return result;
     }
     function scanNext() {
@@ -242,9 +240,6 @@ export function createScanner(text, ignoreTrivia) {
             case 34 /* doubleQuote */:
                 const multiline = (pos + 2 < len) && text.charCodeAt(pos+1) === 34 && text.charCodeAt(pos+2) === 34;
                 pos += multiline ? 3 : 1;
-                if (multiline) {
-                    console.log("AAA", pos, text.substring(pos, pos+20));
-                }
                 value = scanString(multiline);
                 return token = 10 /* StringLiteral */;
             // comments

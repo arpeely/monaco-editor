@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 // NOTE: VSCode's copy of nodejs path library to be usable in common (non-node) namespace
-// Copied from: https://github.com/nodejs/node/blob/v12.8.1/lib/path.js
+// Copied from: https://github.com/nodejs/node/blob/v16.14.2/lib/path.js
 /**
  * Copyright Joyent, Inc. and other Node contributors.
  *
@@ -54,11 +54,17 @@ class ErrorInvalidArgType extends Error {
         this.code = 'ERR_INVALID_ARG_TYPE';
     }
 }
+function validateObject(pathObject, name) {
+    if (pathObject === null || typeof pathObject !== 'object') {
+        throw new ErrorInvalidArgType(name, 'Object', pathObject);
+    }
+}
 function validateString(value, name) {
     if (typeof value !== 'string') {
         throw new ErrorInvalidArgType(name, 'string', value);
     }
 }
+const platformIsWin32 = (process.platform === 'win32');
 function isPathSeparator(code) {
     return code === CHAR_FORWARD_SLASH || code === CHAR_BACKWARD_SLASH;
 }
@@ -66,8 +72,8 @@ function isPosixPathSeparator(code) {
     return code === CHAR_FORWARD_SLASH;
 }
 function isWindowsDeviceRoot(code) {
-    return code >= CHAR_UPPERCASE_A && code <= CHAR_UPPERCASE_Z ||
-        code >= CHAR_LOWERCASE_A && code <= CHAR_LOWERCASE_Z;
+    return (code >= CHAR_UPPERCASE_A && code <= CHAR_UPPERCASE_Z) ||
+        (code >= CHAR_LOWERCASE_A && code <= CHAR_LOWERCASE_Z);
 }
 // Resolves . and .. elements in a path with directory names
 function normalizeString(path, allowAboveRoot, separator, isPathSeparator) {
@@ -143,9 +149,7 @@ function normalizeString(path, allowAboveRoot, separator, isPathSeparator) {
     return res;
 }
 function _format(sep, pathObject) {
-    if (pathObject === null || typeof pathObject !== 'object') {
-        throw new ErrorInvalidArgType('pathObject', 'Object', pathObject);
-    }
+    validateObject(pathObject, 'pathObject');
     const dir = pathObject.dir || pathObject.root;
     const base = pathObject.base ||
         `${pathObject.name || ''}${pathObject.ext || ''}`;
@@ -183,8 +187,8 @@ export const win32 = {
                 // Verify that a cwd was found and that it actually points
                 // to our drive. If not, default to the drive's root.
                 if (path === undefined ||
-                    path.slice(0, 2).toLowerCase() !== resolvedDevice.toLowerCase() &&
-                        path.charCodeAt(2) === CHAR_BACKWARD_SLASH) {
+                    (path.slice(0, 2).toLowerCase() !== resolvedDevice.toLowerCase() &&
+                        path.charCodeAt(2) === CHAR_BACKWARD_SLASH)) {
                     path = `${resolvedDevice}\\`;
                 }
             }
@@ -382,10 +386,10 @@ export const win32 = {
         const code = path.charCodeAt(0);
         return isPathSeparator(code) ||
             // Possible device root
-            len > 2 &&
+            (len > 2 &&
                 isWindowsDeviceRoot(code) &&
                 path.charCodeAt(1) === CHAR_COLON &&
-                isPathSeparator(path.charCodeAt(2));
+                isPathSeparator(path.charCodeAt(2)));
     },
     join(...paths) {
         if (paths.length === 0) {
@@ -409,14 +413,14 @@ export const win32 = {
             return '.';
         }
         // Make sure that the joined path doesn't start with two slashes, because
-        // normalize() will mistake it for an UNC path then.
+        // normalize() will mistake it for a UNC path then.
         //
         // This step is skipped when it is very clear that the user actually
-        // intended to point at an UNC path. This is assumed when the first
+        // intended to point at a UNC path. This is assumed when the first
         // non-empty string arguments starts with exactly two slashes followed by
         // at least one more non-slash character.
         //
-        // Note that for normalize() to treat a path as an UNC path it needs to
+        // Note that for normalize() to treat a path as a UNC path it needs to
         // have at least 2 components, so we don't filter for that here.
         // This means that the user can use join to construct UNC paths from
         // a server name and a share name; for example:
@@ -568,11 +572,8 @@ export const win32 = {
     },
     toNamespacedPath(path) {
         // Note: this will *probably* throw somewhere.
-        if (typeof path !== 'string') {
+        if (typeof path !== 'string' || path.length === 0) {
             return path;
-        }
-        if (path.length === 0) {
-            return '';
         }
         const resolvedPath = win32.resolve(path);
         if (resolvedPath.length <= 2) {
@@ -979,13 +980,26 @@ export const win32 = {
     win32: null,
     posix: null
 };
+const posixCwd = (() => {
+    if (platformIsWin32) {
+        // Converts Windows' backslash path separators to POSIX forward slashes
+        // and truncates any drive indicator
+        const regexp = /\\/g;
+        return () => {
+            const cwd = process.cwd().replace(regexp, '/');
+            return cwd.slice(cwd.indexOf('/'));
+        };
+    }
+    // We're already on POSIX, no need for any transformations
+    return () => process.cwd();
+})();
 export const posix = {
     // path.resolve([from ...], to)
     resolve(...pathSegments) {
         let resolvedPath = '';
         let resolvedAbsolute = false;
         for (let i = pathSegments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-            const path = i >= 0 ? pathSegments[i] : process.cwd();
+            const path = i >= 0 ? pathSegments[i] : posixCwd();
             validateString(path, 'path');
             // Skip empty entries
             if (path.length === 0) {
@@ -1370,10 +1384,10 @@ export const posix = {
 };
 posix.win32 = win32.win32 = win32;
 posix.posix = win32.posix = posix;
-export const normalize = (process.platform === 'win32' ? win32.normalize : posix.normalize);
-export const resolve = (process.platform === 'win32' ? win32.resolve : posix.resolve);
-export const relative = (process.platform === 'win32' ? win32.relative : posix.relative);
-export const dirname = (process.platform === 'win32' ? win32.dirname : posix.dirname);
-export const basename = (process.platform === 'win32' ? win32.basename : posix.basename);
-export const extname = (process.platform === 'win32' ? win32.extname : posix.extname);
-export const sep = (process.platform === 'win32' ? win32.sep : posix.sep);
+export const normalize = (platformIsWin32 ? win32.normalize : posix.normalize);
+export const resolve = (platformIsWin32 ? win32.resolve : posix.resolve);
+export const relative = (platformIsWin32 ? win32.relative : posix.relative);
+export const dirname = (platformIsWin32 ? win32.dirname : posix.dirname);
+export const basename = (platformIsWin32 ? win32.basename : posix.basename);
+export const extname = (platformIsWin32 ? win32.extname : posix.extname);
+export const sep = (platformIsWin32 ? win32.sep : posix.sep);

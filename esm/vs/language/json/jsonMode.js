@@ -2024,19 +2024,24 @@ function createScanner(text, ignoreTrivia) {
     }
     return text.substring(start, end);
   }
-  function scanString() {
+  function scanString(multiline = false) {
     var result = "", start = pos;
     while (true) {
-      if (pos >= len) {
+      if (pos >= len || (multiline && pos >= len-2)) {
+        // TODO check end of string
+        if (multiline) {
+            pos += 2;
+        }
         result += text.substring(start, pos);
-        scanError = 2;
+        scanError = 2 /* UnexpectedEndOfString */;
         break;
       }
       var ch = text.charCodeAt(pos);
-      if (ch === 34) {
-        result += text.substring(start, pos);
-        pos++;
-        break;
+      const endOfString = multiline ? ch === 34 /* doubleQuote */ && text.charCodeAt(pos + 1) === 34 && text.charCodeAt(pos + 2) === 34 : ch === 34 /* doubleQuote */;
+      if (endOfString /* doubleQuote */) {
+          result += text.substring(start, pos);
+          pos+= multiline ? 3 : 1;
+          break;
       }
       if (ch === 92) {
         result += text.substring(start, pos);
@@ -2087,9 +2092,22 @@ function createScanner(text, ignoreTrivia) {
       }
       if (ch >= 0 && ch <= 31) {
         if (isLineBreak(ch)) {
-          result += text.substring(start, pos);
-          scanError = 2;
-          break;
+            if (multiline) {
+                result += text.substring(start, pos);
+                result += "\n";
+                pos++;
+                if (ch === 13 /* carriageReturn */ && text.charCodeAt(pos) === 10 /* lineFeed */) {
+                    pos++;
+                }
+                lineNumber++;
+                tokenLineStartOffset = pos;
+                start=pos;
+                continue;
+            } else {
+                result += text.substring(start, pos);
+                scanError = 2 /* UnexpectedEndOfString */;
+                break;
+            }
         } else {
           scanError = 6;
         }
@@ -2148,8 +2166,9 @@ function createScanner(text, ignoreTrivia) {
         pos++;
         return token = 5;
       case 34:
-        pos++;
-        value = scanString();
+        const multiline = (pos + 2 < len) && text.charCodeAt(pos+1) === 34 && text.charCodeAt(pos+2) === 34;
+        pos += multiline ? 3 : 1;
+        value = scanString(multiline);
         return token = 10;
       case 47:
         var start = pos - 1;
@@ -2395,8 +2414,8 @@ function tokenize(comments, line, state, offsetDelta = 0) {
   let adjustOffset = false;
   switch (state.scanError) {
     case 2 /* UnexpectedEndOfString */:
-      line = '"' + line;
-      numberOfInsertedCharacters = 1;
+      line = '"""' + line;
+      numberOfInsertedCharacters = 3;
       break;
     case 1 /* UnexpectedEndOfComment */:
       line = "/*" + line;
@@ -2466,7 +2485,9 @@ function tokenize(comments, line, state, offsetDelta = 0) {
         const currentParent = parents ? parents.type : 0 /* Object */;
         const inArray = currentParent === 1 /* Array */;
         type = lastWasColon || inArray ? TOKEN_VALUE_STRING : TOKEN_PROPERTY_NAME;
-        lastWasColon = false;
+        if (scanner.getTokenError() != 2) {
+            lastWasColon = false;
+        }
         break;
       case 11 /* NumericLiteral */:
         type = TOKEN_VALUE_NUMBER;

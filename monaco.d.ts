@@ -8481,6 +8481,8 @@ declare namespace monaco.languages.json {
          * `DiagnosticsOptions.allowComments` will override this setting.
          */
         readonly allowComments?: boolean;
+
+        readonly allowMultilineStrings?: boolean;
         /**
          * A list of known schemas and/or associations of schemas to file names.
          */

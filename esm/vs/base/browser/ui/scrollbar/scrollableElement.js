@@ -2,7 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import './media/scrollbars.css';
+import { getZoomFactor } from '../../browser.js';
 import * as dom from '../../dom.js';
 import { createFastDomNode } from '../../fastDomNode.js';
 import { StandardWheelEvent } from '../../mouseEvent.js';
@@ -14,7 +14,7 @@ import { Emitter } from '../../../common/event.js';
 import { dispose } from '../../../common/lifecycle.js';
 import * as platform from '../../../common/platform.js';
 import { Scrollable } from '../../../common/scrollable.js';
-import { getZoomFactor } from '../../browser.js';
+import './media/scrollbars.css';
 const HIDE_TIMEOUT = 500;
 const SCROLL_WHEEL_SENSITIVITY = 50;
 const SCROLL_WHEEL_SMOOTH_SCROLL_ENABLED = true;
@@ -54,6 +54,17 @@ export class MouseWheelClassifier {
             iteration++;
         } while (true);
         return (score <= 0.5);
+    }
+    acceptStandardWheelEvent(e) {
+        const osZoomFactor = window.devicePixelRatio / getZoomFactor();
+        if (platform.isWindows || platform.isLinux) {
+            // On Windows and Linux, the incoming delta events are multiplied with the OS zoom factor.
+            // The OS zoom factor can be reverse engineered by using the device pixel ratio and the configured zoom factor into account.
+            this.accept(Date.now(), e.deltaX / osZoomFactor, e.deltaY / osZoomFactor);
+        }
+        else {
+            this.accept(Date.now(), e.deltaX, e.deltaY);
+        }
     }
     accept(timestamp, deltaX, deltaY) {
         const item = new MouseWheelClassifierItem(timestamp, deltaX, deltaY);
@@ -108,6 +119,9 @@ export class MouseWheelClassifier {
 }
 MouseWheelClassifier.INSTANCE = new MouseWheelClassifier();
 export class AbstractScrollableElement extends Widget {
+    get options() {
+        return this._options;
+    }
     constructor(element, options, scrollable) {
         super();
         this._onScroll = this._register(new Emitter());
@@ -156,7 +170,7 @@ export class AbstractScrollableElement extends Widget {
         this._mouseWheelToDispose = [];
         this._setListeningToMouseWheel(this._options.handleMouseWheel);
         this.onmouseover(this._listenOnDomNode, (e) => this._onMouseOver(e));
-        this.onnonbubblingmouseout(this._listenOnDomNode, (e) => this._onMouseOut(e));
+        this.onmouseleave(this._listenOnDomNode, (e) => this._onMouseLeave(e));
         this._hideTimeout = this._register(new TimeoutTimer());
         this._isDragging = false;
         this._mouseIsOver = false;
@@ -180,11 +194,11 @@ export class AbstractScrollableElement extends Widget {
         };
     }
     /**
-     * Delegate a mouse down event to the vertical scrollbar.
+     * Delegate a pointer down event to the vertical scrollbar.
      * This is to help with clicking somewhere else and having the scrollbar react.
      */
-    delegateVerticalScrollbarMouseDown(browserEvent) {
-        this._verticalScrollbar.delegateMouseDown(browserEvent);
+    delegateVerticalScrollbarPointerDown(browserEvent) {
+        this._verticalScrollbar.delegatePointerDown(browserEvent);
     }
     getScrollDimensions() {
         return this._scrollable.getScrollDimensions();
@@ -241,6 +255,9 @@ export class AbstractScrollableElement extends Widget {
             this._render();
         }
     }
+    delegateScrollFromMouseWheelEvent(browserEvent) {
+        this._onMouseWheel(new StandardWheelEvent(browserEvent));
+    }
     // -------------------- mouse wheel scrolling --------------------
     _setListeningToMouseWheel(shouldListen) {
         const isListening = (this._mouseWheelToDispose.length > 0);
@@ -259,17 +276,13 @@ export class AbstractScrollableElement extends Widget {
         }
     }
     _onMouseWheel(e) {
+        var _a;
+        if ((_a = e.browserEvent) === null || _a === void 0 ? void 0 : _a.defaultPrevented) {
+            return;
+        }
         const classifier = MouseWheelClassifier.INSTANCE;
         if (SCROLL_WHEEL_SMOOTH_SCROLL_ENABLED) {
-            const osZoomFactor = window.devicePixelRatio / getZoomFactor();
-            if (platform.isWindows || platform.isLinux) {
-                // On Windows and Linux, the incoming delta events are multiplied with the OS zoom factor.
-                // The OS zoom factor can be reverse engineered by using the device pixel ratio and the configured zoom factor into account.
-                classifier.accept(Date.now(), e.deltaX / osZoomFactor, e.deltaY / osZoomFactor);
-            }
-            else {
-                classifier.accept(Date.now(), e.deltaX, e.deltaY);
-            }
+            classifier.acceptStandardWheelEvent(e);
         }
         // console.log(`${Date.now()}, ${e.deltaY}, ${e.deltaX}`);
         let didScroll = false;
@@ -277,7 +290,14 @@ export class AbstractScrollableElement extends Widget {
             let deltaY = e.deltaY * this._options.mouseWheelScrollSensitivity;
             let deltaX = e.deltaX * this._options.mouseWheelScrollSensitivity;
             if (this._options.scrollPredominantAxis) {
-                if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+                if (this._options.scrollYToX && deltaX + deltaY === 0) {
+                    // when configured to map Y to X and we both see
+                    // no dominant axis and X and Y are competing with
+                    // identical values into opposite directions, we
+                    // ignore the delta as we cannot make a decision then
+                    deltaX = deltaY = 0;
+                }
+                else if (Math.abs(deltaY) >= Math.abs(deltaX)) {
                     deltaX = 0;
                 }
                 else {
@@ -302,11 +322,15 @@ export class AbstractScrollableElement extends Widget {
             const futureScrollPosition = this._scrollable.getFutureScrollPosition();
             let desiredScrollPosition = {};
             if (deltaY) {
-                const desiredScrollTop = futureScrollPosition.scrollTop - SCROLL_WHEEL_SENSITIVITY * deltaY;
+                const deltaScrollTop = SCROLL_WHEEL_SENSITIVITY * deltaY;
+                // Here we convert values such as -0.3 to -1 or 0.3 to 1, otherwise low speed scrolling will never scroll
+                const desiredScrollTop = futureScrollPosition.scrollTop - (deltaScrollTop < 0 ? Math.floor(deltaScrollTop) : Math.ceil(deltaScrollTop));
                 this._verticalScrollbar.writeScrollPosition(desiredScrollPosition, desiredScrollTop);
             }
             if (deltaX) {
-                const desiredScrollLeft = futureScrollPosition.scrollLeft - SCROLL_WHEEL_SENSITIVITY * deltaX;
+                const deltaScrollLeft = SCROLL_WHEEL_SENSITIVITY * deltaX;
+                // Here we convert values such as -0.3 to -1 or 0.3 to 1, otherwise low speed scrolling will never scroll
+                const desiredScrollLeft = futureScrollPosition.scrollLeft - (deltaScrollLeft < 0 ? Math.floor(deltaScrollLeft) : Math.ceil(deltaScrollLeft));
                 this._horizontalScrollbar.writeScrollPosition(desiredScrollPosition, desiredScrollLeft);
             }
             // Check that we are scrolling towards a location which is valid
@@ -387,7 +411,7 @@ export class AbstractScrollableElement extends Widget {
         this._isDragging = false;
         this._hide();
     }
-    _onMouseOut(e) {
+    _onMouseLeave(e) {
         this._mouseIsOver = false;
         this._hide();
     }
@@ -416,7 +440,11 @@ export class ScrollableElement extends AbstractScrollableElement {
     constructor(element, options) {
         options = options || {};
         options.mouseWheelSmoothScroll = false;
-        const scrollable = new Scrollable(0, (callback) => dom.scheduleAtNextAnimationFrame(callback));
+        const scrollable = new Scrollable({
+            forceIntegerValues: true,
+            smoothScrollDuration: 0,
+            scheduleAtNextAnimationFrame: (callback) => dom.scheduleAtNextAnimationFrame(callback)
+        });
         super(element, options, scrollable);
         this._register(scrollable);
     }
@@ -440,9 +468,17 @@ export class SmoothScrollableElement extends AbstractScrollableElement {
         return this._scrollable.getCurrentScrollPosition();
     }
 }
-export class DomScrollableElement extends ScrollableElement {
+export class DomScrollableElement extends AbstractScrollableElement {
     constructor(element, options) {
-        super(element, options);
+        options = options || {};
+        options.mouseWheelSmoothScroll = false;
+        const scrollable = new Scrollable({
+            forceIntegerValues: false,
+            smoothScrollDuration: 0,
+            scheduleAtNextAnimationFrame: (callback) => dom.scheduleAtNextAnimationFrame(callback)
+        });
+        super(element, options, scrollable);
+        this._register(scrollable);
         this._element = element;
         this.onScroll((e) => {
             if (e.scrollTopChanged) {
@@ -453,6 +489,12 @@ export class DomScrollableElement extends ScrollableElement {
             }
         });
         this.scanDomNode();
+    }
+    setScrollPosition(update) {
+        this._scrollable.setScrollPositionNow(update);
+    }
+    getScrollPosition() {
+        return this._scrollable.getCurrentScrollPosition();
     }
     scanDomNode() {
         // width, scrollLeft, scrollWidth, height, scrollTop, scrollHeight
@@ -484,11 +526,11 @@ function resolveOptions(opts) {
         mouseWheelSmoothScroll: (typeof opts.mouseWheelSmoothScroll !== 'undefined' ? opts.mouseWheelSmoothScroll : true),
         arrowSize: (typeof opts.arrowSize !== 'undefined' ? opts.arrowSize : 11),
         listenOnDomNode: (typeof opts.listenOnDomNode !== 'undefined' ? opts.listenOnDomNode : null),
-        horizontal: (typeof opts.horizontal !== 'undefined' ? opts.horizontal : 1 /* Auto */),
+        horizontal: (typeof opts.horizontal !== 'undefined' ? opts.horizontal : 1 /* ScrollbarVisibility.Auto */),
         horizontalScrollbarSize: (typeof opts.horizontalScrollbarSize !== 'undefined' ? opts.horizontalScrollbarSize : 10),
         horizontalSliderSize: (typeof opts.horizontalSliderSize !== 'undefined' ? opts.horizontalSliderSize : 0),
         horizontalHasArrows: (typeof opts.horizontalHasArrows !== 'undefined' ? opts.horizontalHasArrows : false),
-        vertical: (typeof opts.vertical !== 'undefined' ? opts.vertical : 1 /* Auto */),
+        vertical: (typeof opts.vertical !== 'undefined' ? opts.vertical : 1 /* ScrollbarVisibility.Auto */),
         verticalScrollbarSize: (typeof opts.verticalScrollbarSize !== 'undefined' ? opts.verticalScrollbarSize : 10),
         verticalHasArrows: (typeof opts.verticalHasArrows !== 'undefined' ? opts.verticalHasArrows : false),
         verticalSliderSize: (typeof opts.verticalSliderSize !== 'undefined' ? opts.verticalSliderSize : 0),

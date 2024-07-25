@@ -8749,6 +8749,7 @@ export namespace languages.json {
         doNotSuggest?: boolean;
         suggestSortText?: string;
         allowComments?: boolean;
+        allowMultilineStrings?: boolean;
         allowTrailingCommas?: boolean;
     }
     export interface MatchingSchema {
@@ -8766,6 +8767,10 @@ export namespace languages.json {
          * `DiagnosticsOptions.allowComments` will override this setting.
          */
         readonly allowComments?: boolean;
+        /**
+         * If set, multilines are tolerated.
+         */
+        readonly allowMultilineStrings?: boolean;
         /**
          * A list of known schemas and/or associations of schemas to file names.
          */

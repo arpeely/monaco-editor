@@ -82,18 +82,23 @@ function createScanner(text, ignoreTrivia = false) {
     }
     return text.substring(start, end);
   }
-  function scanString() {
+  function scanString(multiline = false) {
     let result = "", start = pos;
     while (true) {
-      if (pos >= len) {
+      if (pos >= len || (multiline && pos >= len-2)) {
+        // TODO check end of string
+        if (multiline) {
+            pos += 2;
+        }
         result += text.substring(start, pos);
-        scanError = 2;
+        scanError = 2 /* UnexpectedEndOfString */;
         break;
       }
       const ch = text.charCodeAt(pos);
-      if (ch === 34) {
+      const endOfString = multiline ? ch === 34 /* doubleQuote */ && text.charCodeAt(pos + 1) === 34 && text.charCodeAt(pos + 2) === 34 : ch === 34 /* doubleQuote */;
+      if (endOfString /* doubleQuote */) {
         result += text.substring(start, pos);
-        pos++;
+        pos+= multiline ? 3 : 1;
         break;
       }
       if (ch === 92) {
@@ -145,9 +150,22 @@ function createScanner(text, ignoreTrivia = false) {
       }
       if (ch >= 0 && ch <= 31) {
         if (isLineBreak(ch)) {
-          result += text.substring(start, pos);
-          scanError = 2;
-          break;
+            if (multiline) {
+                result += text.substring(start, pos);
+                result += "\n";
+                pos++;
+                if (ch === 13 /* carriageReturn */ && text.charCodeAt(pos) === 10 /* lineFeed */) {
+                    pos++;
+                }
+                lineNumber++;
+                tokenLineStartOffset = pos;
+                start=pos;
+                continue;
+            } else {
+                result += text.substring(start, pos);
+                scanError = 2 /* UnexpectedEndOfString */;
+                break;
+            }
         } else {
           scanError = 6;
         }
@@ -206,8 +224,9 @@ function createScanner(text, ignoreTrivia = false) {
         pos++;
         return token = 5;
       case 34:
-        pos++;
-        value = scanString();
+        const multiline = (pos + 2 < len) && text.charCodeAt(pos+1) === 34 && text.charCodeAt(pos+2) === 34;
+        pos += multiline ? 3 : 1;
+        value = scanString(multiline);
         return token = 10;
       case 47:
         const start = pos - 1;
@@ -2952,7 +2971,7 @@ var ValidationResult = class {
   }
 };
 function newJSONDocument(root, diagnostics = []) {
-  return new JSONDocument(root, diagnostics, []);
+  return new JSONDocument(root, diagnostics, [], []);
 }
 function getNodeValue3(node) {
   return getNodeValue2(node);
@@ -2964,10 +2983,11 @@ function contains2(node, offset, includeRightBound = false) {
   return offset >= node.offset && offset < node.offset + node.length || includeRightBound && offset === node.offset + node.length;
 }
 var JSONDocument = class {
-  constructor(root, syntaxErrors = [], comments = []) {
+  constructor(root, syntaxErrors = [], comments = [], multilineStrings = []) {
     this.root = root;
     this.syntaxErrors = syntaxErrors;
     this.comments = comments;
+    this.multilineStrings = multilineStrings;
   }
   getNodeFromOffset(offset, includeRightBound = false) {
     if (this.root) {
@@ -3687,11 +3707,17 @@ function parse3(textDocument, config) {
   const text = textDocument.getText();
   const scanner = createScanner2(text, false);
   const commentRanges = config && config.collectComments ? [] : void 0;
+  const multilineStringRanges = [];
   function _scanNext() {
     while (true) {
       const token2 = scanner.scan();
       _checkScanError();
       switch (token2) {
+        case 10 /* StringLiteral */:
+          if (scanner.getTokenLength() > 3 && text.substring(scanner.getTokenOffset(), scanner.getTokenOffset() + 3) === "\"\"\"") {
+            multilineStringRanges.push(Range.create(textDocument.positionAt(scanner.getTokenOffset()), textDocument.positionAt(scanner.getTokenOffset() + scanner.getTokenLength())));
+          }
+          return token2;
         case 12:
         case 13:
           if (Array.isArray(commentRanges)) {
@@ -3964,7 +3990,7 @@ function parse3(textDocument, config) {
       _error(t("End of file expected."), ErrorCode.Undefined);
     }
   }
-  return new JSONDocument(_root, problems, commentRanges);
+  return new JSONDocument(_root, problems, commentRanges, multilineStringRanges);
 }
 
 // node_modules/vscode-json-languageservice/lib/esm/utils/json.js
@@ -5060,6 +5086,7 @@ var JSONValidation = class {
     const getDiagnostics = (schema2) => {
       let trailingCommaSeverity = documentSettings?.trailingCommas ? toDiagnosticSeverity(documentSettings.trailingCommas) : DiagnosticSeverity.Error;
       let commentSeverity = documentSettings?.comments ? toDiagnosticSeverity(documentSettings.comments) : this.commentSeverity;
+      let allowMultiline = documentSettings && documentSettings.allowMultilineStrings;
       let schemaValidation = documentSettings?.schemaValidation ? toDiagnosticSeverity(documentSettings.schemaValidation) : DiagnosticSeverity.Warning;
       let schemaRequest = documentSettings?.schemaRequest ? toDiagnosticSeverity(documentSettings.schemaRequest) : DiagnosticSeverity.Warning;
       if (schema2) {
@@ -5108,6 +5135,12 @@ var JSONValidation = class {
         const message = t("Comments are not permitted in JSON.");
         jsonDocument.comments.forEach((c) => {
           addProblem(Diagnostic.create(c, message, commentSeverity, ErrorCode.CommentNotPermitted));
+        });
+      }
+      if (!allowMultiline) {
+        const message = t("Multiline strings are not permitted in JSON");
+        jsonDocument.multilineStrings.forEach((c) => {
+          addProblem(Diagnostic.create(c, message, DiagnosticSeverity.Error, ErrorCode.UnexpectedEndOfString));
         });
       }
       return diagnostics;

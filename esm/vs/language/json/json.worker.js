@@ -84,24 +84,19 @@ function createScanner(text, ignoreTrivia) {
     }
     return text.substring(start, end);
   }
-  function scanString(multiline = false) {
+  function scanString() {
     var result = "", start = pos;
     while (true) {
-      if (pos >= len || (multiline && pos >= len-2)) {
-        // TODO check end of string
-        if (multiline) {
-            pos += 2;
-        }
+      if (pos >= len) {
         result += text.substring(start, pos);
-        scanError = 2 /* UnexpectedEndOfString */;
+        scanError = 2;
         break;
       }
       var ch = text.charCodeAt(pos);
-      const endOfString = multiline ? ch === 34 /* doubleQuote */ && text.charCodeAt(pos + 1) === 34 && text.charCodeAt(pos + 2) === 34 : ch === 34 /* doubleQuote */;
-      if (endOfString /* doubleQuote */) {
-          result += text.substring(start, pos);
-          pos+= multiline ? 3 : 1;
-          break;
+      if (ch === 34) {
+        result += text.substring(start, pos);
+        pos++;
+        break;
       }
       if (ch === 92) {
         result += text.substring(start, pos);
@@ -152,22 +147,9 @@ function createScanner(text, ignoreTrivia) {
       }
       if (ch >= 0 && ch <= 31) {
         if (isLineBreak(ch)) {
-            if (multiline) {
-                result += text.substring(start, pos);
-                result += "\n";
-                pos++;
-                if (ch === 13 /* carriageReturn */ && text.charCodeAt(pos) === 10 /* lineFeed */) {
-                    pos++;
-                }
-                lineNumber++;
-                tokenLineStartOffset = pos;
-                start=pos;
-                continue;
-            } else {
-                result += text.substring(start, pos);
-                scanError = 2 /* UnexpectedEndOfString */;
-                break;
-            }
+          result += text.substring(start, pos);
+          scanError = 2;
+          break;
         } else {
           scanError = 6;
         }
@@ -226,9 +208,8 @@ function createScanner(text, ignoreTrivia) {
         pos++;
         return token = 5;
       case 34:
-        const multiline = (pos + 2 < len) && text.charCodeAt(pos+1) === 34 && text.charCodeAt(pos+2) === 34;
-        pos += multiline ? 3 : 1;
-        value = scanString(multiline);
+        pos++;
+        value = scanString();
         return token = 10;
       case 47:
         var start = pos - 1;
@@ -2820,7 +2801,7 @@ function newJSONDocument(root, diagnostics) {
   if (diagnostics === void 0) {
     diagnostics = [];
   }
-  return new JSONDocument(root, diagnostics, [], []);
+  return new JSONDocument(root, diagnostics, []);
 }
 function getNodeValue3(node) {
   return getNodeValue2(node);
@@ -2835,7 +2816,7 @@ function contains2(node, offset, includeRightBound) {
   return offset >= node.offset && offset < node.offset + node.length || includeRightBound && offset === node.offset + node.length;
 }
 var JSONDocument = function() {
-  function JSONDocument2(root, syntaxErrors, comments, multilineStrings) {
+  function JSONDocument2(root, syntaxErrors, comments) {
     if (syntaxErrors === void 0) {
       syntaxErrors = [];
     }
@@ -2845,7 +2826,6 @@ var JSONDocument = function() {
     this.root = root;
     this.syntaxErrors = syntaxErrors;
     this.comments = comments;
-    this.multilineStrings = multilineStrings;
   }
   JSONDocument2.prototype.getNodeFromOffset = function(offset, includeRightBound) {
     if (includeRightBound === void 0) {
@@ -3483,17 +3463,11 @@ function parse3(textDocument, config) {
   var text = textDocument.getText();
   var scanner = createScanner2(text, false);
   var commentRanges = config && config.collectComments ? [] : void 0;
-  var multilineStringRanges = [];
   function _scanNext() {
     while (true) {
       var token_1 = scanner.scan();
       _checkScanError();
       switch (token_1) {
-        case 10 /* StringLiteral */:
-            if (scanner.getTokenLength() > 3 && text.substring(scanner.getTokenOffset(), scanner.getTokenOffset() + 3) === "\"\"\"") {
-                multilineStringRanges.push(Range.create(textDocument.positionAt(scanner.getTokenOffset()), textDocument.positionAt(scanner.getTokenOffset() + scanner.getTokenLength())));
-            }
-            return token_1;
         case 12:
         case 13:
           if (Array.isArray(commentRanges)) {
@@ -3764,7 +3738,7 @@ function parse3(textDocument, config) {
       _error(localize2("End of file expected", "End of file expected."), ErrorCode.Undefined);
     }
   }
-  return new JSONDocument(_root, problems, commentRanges, multilineStringRanges);
+  return new JSONDocument(_root, problems, commentRanges);
 }
 
 // node_modules/vscode-json-languageservice/lib/esm/utils/json.js
@@ -4867,7 +4841,6 @@ var JSONValidation = function() {
     var getDiagnostics = function(schema2) {
       var trailingCommaSeverity = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.trailingCommas) ? toDiagnosticSeverity(documentSettings.trailingCommas) : DiagnosticSeverity.Error;
       var commentSeverity = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.comments) ? toDiagnosticSeverity(documentSettings.comments) : _this.commentSeverity;
-      var allowMultiline = documentSettings && documentSettings.allowMultilineStrings;
       var schemaValidation = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.schemaValidation) ? toDiagnosticSeverity(documentSettings.schemaValidation) : DiagnosticSeverity.Warning;
       var schemaRequest = (documentSettings === null || documentSettings === void 0 ? void 0 : documentSettings.schemaRequest) ? toDiagnosticSeverity(documentSettings.schemaRequest) : DiagnosticSeverity.Warning;
       if (schema2) {
@@ -4911,12 +4884,6 @@ var JSONValidation = function() {
           addProblem(Diagnostic.create(c, message_1, commentSeverity, ErrorCode.CommentNotPermitted));
         });
       }
-      if (!allowMultiline) {
-        var message_1 = localize4('InvalidMultilineString', 'Multiline strings are not permitted in JSON');
-        jsonDocument.multilineStrings.forEach(function (c) {
-            addProblem(Diagnostic.create(c, message_1, DiagnosticSeverity.Error, ErrorCode.UnexpectedEndOfString));
-        });
-    }
       return diagnostics;
     };
     if (schema) {

@@ -8748,7 +8748,6 @@ declare namespace monaco.languages.json {
         doNotSuggest?: boolean;
         suggestSortText?: string;
         allowComments?: boolean;
-        allowMultilineStrings?: boolean;
         allowTrailingCommas?: boolean;
     }
     export interface MatchingSchema {

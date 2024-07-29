@@ -2,7 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import { once } from '../../../../base/common/functional.js';
+import { createSingleCallFunction } from '../../../../base/common/functional.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getCodeEditor, isDiffEditor } from '../../../browser/editorBrowser.js';
 import { OverviewRulerLane } from '../../../common/model.js';
@@ -22,7 +22,7 @@ export class AbstractEditorNavigationQuickAccessProvider {
         this.rangeHighlightDecorationId = undefined;
     }
     //#region Provider methods
-    provide(picker, token) {
+    provide(picker, token, runOptions) {
         var _a;
         const disposables = new DisposableStore();
         // Apply options if any
@@ -31,7 +31,7 @@ export class AbstractEditorNavigationQuickAccessProvider {
         picker.matchOnLabel = picker.matchOnDescription = picker.matchOnDetail = picker.sortByLabel = false;
         // Provide based on current active editor
         const pickerDisposable = disposables.add(new MutableDisposable());
-        pickerDisposable.value = this.doProvide(picker, token);
+        pickerDisposable.value = this.doProvide(picker, token, runOptions);
         // Re-create whenever the active editor changes
         disposables.add(this.onDidActiveTextEditorControlChange(() => {
             // Clear old
@@ -41,7 +41,7 @@ export class AbstractEditorNavigationQuickAccessProvider {
         }));
         return disposables;
     }
-    doProvide(picker, token) {
+    doProvide(picker, token, runOptions) {
         var _a;
         const disposables = new DisposableStore();
         // With text control
@@ -66,12 +66,12 @@ export class AbstractEditorNavigationQuickAccessProvider {
                         editor.restoreViewState(lastKnownEditorViewState);
                     }
                 };
-                disposables.add(once(token.onCancellationRequested)(() => { var _a; return (_a = context.restoreViewState) === null || _a === void 0 ? void 0 : _a.call(context); }));
+                disposables.add(createSingleCallFunction(token.onCancellationRequested)(() => { var _a; return (_a = context.restoreViewState) === null || _a === void 0 ? void 0 : _a.call(context); }));
             }
             // Clean up decorations on dispose
             disposables.add(toDisposable(() => this.clearDecorations(editor)));
             // Ask subclass for entries
-            disposables.add(this.provideWithTextEditor(context, picker, token));
+            disposables.add(this.provideWithTextEditor(context, picker, token, runOptions));
         }
         // Without text control
         else {
@@ -86,7 +86,7 @@ export class AbstractEditorNavigationQuickAccessProvider {
         return true;
     }
     gotoLocation({ editor }, options) {
-        editor.setSelection(options.range);
+        editor.setSelection(options.range, "code.jump" /* TextEditorSelectionSource.JUMP */);
         editor.revealRangeInCenter(options.range, 0 /* ScrollType.Smooth */);
         if (!options.preserveFocus) {
             editor.focus();

@@ -17,12 +17,11 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
         this._context = context;
         this._primaryPosition = null;
         const options = this._context.configuration.options;
-        const wrappingInfo = options.get(143 /* EditorOption.wrappingInfo */);
-        const fontInfo = options.get(49 /* EditorOption.fontInfo */);
-        this._lineHeight = options.get(65 /* EditorOption.lineHeight */);
+        const wrappingInfo = options.get(146 /* EditorOption.wrappingInfo */);
+        const fontInfo = options.get(50 /* EditorOption.fontInfo */);
         this._spaceWidth = fontInfo.spaceWidth;
         this._maxIndentLeft = wrappingInfo.wrappingColumn === -1 ? -1 : (wrappingInfo.wrappingColumn * fontInfo.typicalHalfwidthCharacterWidth);
-        this._bracketPairGuideOptions = options.get(15 /* EditorOption.guides */);
+        this._bracketPairGuideOptions = options.get(16 /* EditorOption.guides */);
         this._renderResult = null;
         this._context.addEventHandler(this);
     }
@@ -34,12 +33,11 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
     // --- begin event handlers
     onConfigurationChanged(e) {
         const options = this._context.configuration.options;
-        const wrappingInfo = options.get(143 /* EditorOption.wrappingInfo */);
-        const fontInfo = options.get(49 /* EditorOption.fontInfo */);
-        this._lineHeight = options.get(65 /* EditorOption.lineHeight */);
+        const wrappingInfo = options.get(146 /* EditorOption.wrappingInfo */);
+        const fontInfo = options.get(50 /* EditorOption.fontInfo */);
         this._spaceWidth = fontInfo.spaceWidth;
         this._maxIndentLeft = wrappingInfo.wrappingColumn === -1 ? -1 : (wrappingInfo.wrappingColumn * fontInfo.typicalHalfwidthCharacterWidth);
-        this._bracketPairGuideOptions = options.get(15 /* EditorOption.guides */);
+        this._bracketPairGuideOptions = options.get(16 /* EditorOption.guides */);
         return true;
     }
     onCursorStateChanged(e) {
@@ -87,7 +85,6 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
         const visibleStartLineNumber = ctx.visibleRange.startLineNumber;
         const visibleEndLineNumber = ctx.visibleRange.endLineNumber;
         const scrollWidth = ctx.scrollWidth;
-        const lineHeight = this._lineHeight;
         const activeCursorPosition = this._primaryPosition;
         const indents = this.getGuidesByLine(visibleStartLineNumber, Math.min(visibleEndLineNumber + 1, this._context.viewModel.getLineCount()), activeCursorPosition);
         const output = [];
@@ -107,7 +104,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
                 const width = guide.horizontalLine
                     ? ((_d = (_c = ctx.visibleRangeForPosition(new Position(lineNumber, guide.horizontalLine.endColumn))) === null || _c === void 0 ? void 0 : _c.left) !== null && _d !== void 0 ? _d : (left + this._spaceWidth)) - left
                     : this._spaceWidth;
-                result += `<div class="core-guide ${guide.className} ${className}" style="left:${left}px;height:${lineHeight}px;width:${width}px"></div>`;
+                result += `<div class="core-guide ${guide.className} ${className}" style="left:${left}px;width:${width}px"></div>`;
             }
             output[lineIndex] = result;
         }

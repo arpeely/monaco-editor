@@ -488,7 +488,8 @@ let View = class View extends ViewEventHandler {
         this._scheduleRender();
     }
     layoutOverlayWidget(widgetData) {
-        const shouldRender = this._overlayWidgets.setWidgetPosition(widgetData.widget, widgetData.position);
+        const newPreference = widgetData.position ? widgetData.position.preference : null;
+        const shouldRender = this._overlayWidgets.setWidgetPosition(widgetData.widget, newPreference);
         if (shouldRender) {
             this._scheduleRender();
         }

@@ -7,21 +7,23 @@ import { ShiftCommand } from '../../../common/commands/shiftCommand.js';
 import { EditOperation } from '../../../common/core/editOperation.js';
 import { normalizeIndentation } from '../../../common/core/indentation.js';
 import { Selection } from '../../../common/core/selection.js';
-import { ProcessedIndentRulesSupport } from '../../../common/languages/supports/indentationLineProcessor.js';
-export function getReindentEditOperations(model, languageConfigurationService, startLineNumber, endLineNumber) {
+export function getReindentEditOperations(model, languageConfigurationService, startLineNumber, endLineNumber, inheritedIndent) {
     if (model.getLineCount() === 1 && model.getLineMaxColumn(1) === 1) {
         // Model is empty
         return [];
     }
-    const indentationRulesSupport = languageConfigurationService.getLanguageConfiguration(model.getLanguageId()).indentRulesSupport;
-    if (!indentationRulesSupport) {
+    const indentationRules = languageConfigurationService.getLanguageConfiguration(model.getLanguageId()).indentationRules;
+    if (!indentationRules) {
         return [];
     }
-    const processedIndentRulesSupport = new ProcessedIndentRulesSupport(model, indentationRulesSupport, languageConfigurationService);
     endLineNumber = Math.min(endLineNumber, model.getLineCount());
     // Skip `unIndentedLinePattern` lines
     while (startLineNumber <= endLineNumber) {
-        if (!processedIndentRulesSupport.shouldIgnore(startLineNumber)) {
+        if (!indentationRules.unIndentedLinePattern) {
+            break;
+        }
+        const text = model.getLineContent(startLineNumber);
+        if (!indentationRules.unIndentedLinePattern.test(text)) {
             break;
         }
         startLineNumber++;
@@ -40,29 +42,42 @@ export function getReindentEditOperations(model, languageConfigurationService, s
     };
     const indentEdits = [];
     // indentation being passed to lines below
+    let globalIndent;
     // Calculate indentation for the first line
     // If there is no passed-in indentation, we use the indentation of the first line as base.
     const currentLineText = model.getLineContent(startLineNumber);
-    let globalIndent = strings.getLeadingWhitespace(currentLineText);
+    let adjustedLineContent = currentLineText;
+    if (inheritedIndent !== undefined && inheritedIndent !== null) {
+        globalIndent = inheritedIndent;
+        const oldIndentation = strings.getLeadingWhitespace(currentLineText);
+        adjustedLineContent = globalIndent + currentLineText.substring(oldIndentation.length);
+        if (indentationRules.decreaseIndentPattern && indentationRules.decreaseIndentPattern.test(adjustedLineContent)) {
+            globalIndent = unshiftIndent(globalIndent);
+            adjustedLineContent = globalIndent + currentLineText.substring(oldIndentation.length);
+        }
+        if (currentLineText !== adjustedLineContent) {
+            indentEdits.push(EditOperation.replaceMove(new Selection(startLineNumber, 1, startLineNumber, oldIndentation.length + 1), normalizeIndentation(globalIndent, indentSize, insertSpaces)));
+        }
+    }
+    else {
+        globalIndent = strings.getLeadingWhitespace(currentLineText);
+    }
     // idealIndentForNextLine doesn't equal globalIndent when there is a line matching `indentNextLinePattern`.
     let idealIndentForNextLine = globalIndent;
-    if (processedIndentRulesSupport.shouldIncrease(startLineNumber)) {
+    if (indentationRules.increaseIndentPattern && indentationRules.increaseIndentPattern.test(adjustedLineContent)) {
         idealIndentForNextLine = shiftIndent(idealIndentForNextLine);
         globalIndent = shiftIndent(globalIndent);
     }
-    else if (processedIndentRulesSupport.shouldIndentNextLine(startLineNumber)) {
+    else if (indentationRules.indentNextLinePattern && indentationRules.indentNextLinePattern.test(adjustedLineContent)) {
         idealIndentForNextLine = shiftIndent(idealIndentForNextLine);
     }
     startLineNumber++;
     // Calculate indentation adjustment for all following lines
     for (let lineNumber = startLineNumber; lineNumber <= endLineNumber; lineNumber++) {
-        if (doesLineStartWithString(model, lineNumber)) {
-            continue;
-        }
         const text = model.getLineContent(lineNumber);
         const oldIndentation = strings.getLeadingWhitespace(text);
-        const currentIdealIndent = idealIndentForNextLine;
-        if (processedIndentRulesSupport.shouldDecrease(lineNumber, currentIdealIndent)) {
+        const adjustedLineContent = idealIndentForNextLine + text.substring(oldIndentation.length);
+        if (indentationRules.decreaseIndentPattern && indentationRules.decreaseIndentPattern.test(adjustedLineContent)) {
             idealIndentForNextLine = unshiftIndent(idealIndentForNextLine);
             globalIndent = unshiftIndent(globalIndent);
         }
@@ -70,16 +85,16 @@ export function getReindentEditOperations(model, languageConfigurationService, s
             indentEdits.push(EditOperation.replaceMove(new Selection(lineNumber, 1, lineNumber, oldIndentation.length + 1), normalizeIndentation(idealIndentForNextLine, indentSize, insertSpaces)));
         }
         // calculate idealIndentForNextLine
-        if (processedIndentRulesSupport.shouldIgnore(lineNumber)) {
+        if (indentationRules.unIndentedLinePattern && indentationRules.unIndentedLinePattern.test(text)) {
             // In reindent phase, if the line matches `unIndentedLinePattern` we inherit indentation from above lines
             // but don't change globalIndent and idealIndentForNextLine.
             continue;
         }
-        else if (processedIndentRulesSupport.shouldIncrease(lineNumber, currentIdealIndent)) {
+        else if (indentationRules.increaseIndentPattern && indentationRules.increaseIndentPattern.test(adjustedLineContent)) {
             globalIndent = shiftIndent(globalIndent);
             idealIndentForNextLine = globalIndent;
         }
-        else if (processedIndentRulesSupport.shouldIndentNextLine(lineNumber, currentIdealIndent)) {
+        else if (indentationRules.indentNextLinePattern && indentationRules.indentNextLinePattern.test(adjustedLineContent)) {
             idealIndentForNextLine = shiftIndent(idealIndentForNextLine);
         }
         else {
@@ -87,11 +102,4 @@ export function getReindentEditOperations(model, languageConfigurationService, s
         }
     }
     return indentEdits;
-}
-function doesLineStartWithString(model, lineNumber) {
-    if (!model.tokenization.isCheapToTokenize(lineNumber)) {
-        return false;
-    }
-    const lineTokens = model.tokenization.getLineTokens(lineNumber);
-    return lineTokens.getStandardTokenType(0) === 2 /* StandardTokenType.String */;
 }

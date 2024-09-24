@@ -13,7 +13,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 import * as dom from '../../../../base/browser/dom.js';
 import { asArray, compareBy, numberComparator } from '../../../../base/common/arrays.js';
-import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { isEmptyMarkdownString, MarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { MarkdownRenderer } from '../../../browser/widget/markdownRenderer/browser/markdownRenderer.js';
@@ -152,17 +152,9 @@ let MarkdownHoverParticipant = class MarkdownHoverParticipant {
         this._renderedHoverParts = new MarkdownRenderedHoverParts(hoverParts, context.fragment, this._editor, this._languageService, this._openerService, this._keybindingService, this._hoverService, this._configurationService, context.onContentsChanged);
         return this._renderedHoverParts;
     }
-    markdownHoverContentAtIndex(index) {
-        var _a, _b;
-        return (_b = (_a = this._renderedHoverParts) === null || _a === void 0 ? void 0 : _a.markdownHoverContentAtIndex(index)) !== null && _b !== void 0 ? _b : '';
-    }
-    doesMarkdownHoverAtIndexSupportVerbosityAction(index, action) {
-        var _a, _b;
-        return (_b = (_a = this._renderedHoverParts) === null || _a === void 0 ? void 0 : _a.doesMarkdownHoverAtIndexSupportVerbosityAction(index, action)) !== null && _b !== void 0 ? _b : false;
-    }
-    updateMarkdownHoverVerbosityLevel(action, index, focus) {
+    updateFocusedMarkdownHoverPartVerbosityLevel(action) {
         var _a;
-        (_a = this._renderedHoverParts) === null || _a === void 0 ? void 0 : _a.updateMarkdownHoverPartVerbosityLevel(action, index, focus);
+        (_a = this._renderedHoverParts) === null || _a === void 0 ? void 0 : _a.updateFocusedHoverPartVerbosityLevel(action);
     }
 };
 MarkdownHoverParticipant = __decorate([
@@ -185,16 +177,12 @@ class MarkdownRenderedHoverParts extends Disposable {
         this._hoverService = _hoverService;
         this._configurationService = _configurationService;
         this._onFinishedRendering = _onFinishedRendering;
-        this._focusedHoverPartIndex = -1;
-        this._ongoingHoverOperations = new Map();
+        this._hoverFocusInfo = { hoverPartIndex: -1, focusRemains: false };
         this._renderedHoverParts = this._renderHoverParts(hoverParts, hoverPartsContainer, this._onFinishedRendering);
         this._register(toDisposable(() => {
             this._renderedHoverParts.forEach(renderedHoverPart => {
                 renderedHoverPart.disposables.dispose();
             });
-        }));
-        this._register(toDisposable(() => {
-            this._ongoingHoverOperations.forEach(operation => { operation.tokenSource.dispose(true); });
         }));
     }
     _renderHoverParts(hoverParts, hoverPartsContainer, onFinishedRendering) {
@@ -219,13 +207,19 @@ class MarkdownRenderedHoverParts extends Disposable {
         renderedMarkdown.prepend(actionsContainer);
         disposables.add(this._renderHoverExpansionAction(actionsContainer, HoverVerbosityAction.Increase, canIncreaseVerbosity));
         disposables.add(this._renderHoverExpansionAction(actionsContainer, HoverVerbosityAction.Decrease, canDecreaseVerbosity));
-        this._register(dom.addDisposableListener(renderedMarkdown, dom.EventType.FOCUS_IN, (event) => {
-            event.stopPropagation();
-            this._focusedHoverPartIndex = hoverPartIndex;
+        const focusTracker = disposables.add(dom.trackFocus(renderedMarkdown));
+        disposables.add(focusTracker.onDidFocus(() => {
+            this._hoverFocusInfo = {
+                hoverPartIndex,
+                focusRemains: true
+            };
         }));
-        this._register(dom.addDisposableListener(renderedMarkdown, dom.EventType.FOCUS_OUT, (event) => {
-            event.stopPropagation();
-            this._focusedHoverPartIndex = -1;
+        disposables.add(focusTracker.onDidBlur(() => {
+            var _a;
+            if ((_a = this._hoverFocusInfo) === null || _a === void 0 ? void 0 : _a.focusRemains) {
+                this._hoverFocusInfo.focusRemains = false;
+                return;
+            }
         }));
         return { renderedMarkdown, disposables, hoverSource };
     }
@@ -244,75 +238,58 @@ class MarkdownRenderedHoverParts extends Disposable {
         const actionElement = dom.append(container, $(ThemeIcon.asCSSSelector(isActionIncrease ? increaseHoverVerbosityIcon : decreaseHoverVerbosityIcon)));
         actionElement.tabIndex = 0;
         const hoverDelegate = new WorkbenchHoverDelegate('mouse', false, { target: container, position: { hoverPosition: 0 /* HoverPosition.LEFT */ } }, this._configurationService, this._hoverService);
-        store.add(this._hoverService.setupUpdatableHover(hoverDelegate, actionElement, labelForHoverVerbosityAction(this._keybindingService, action)));
+        if (isActionIncrease) {
+            const kb = this._keybindingService.lookupKeybinding(INCREASE_HOVER_VERBOSITY_ACTION_ID);
+            store.add(this._hoverService.setupUpdatableHover(hoverDelegate, actionElement, kb ?
+                nls.localize('increaseVerbosityWithKb', "Increase Verbosity ({0})", kb.getLabel()) :
+                nls.localize('increaseVerbosity', "Increase Verbosity")));
+        }
+        else {
+            const kb = this._keybindingService.lookupKeybinding(DECREASE_HOVER_VERBOSITY_ACTION_ID);
+            store.add(this._hoverService.setupUpdatableHover(hoverDelegate, actionElement, kb ?
+                nls.localize('decreaseVerbosityWithKb', "Decrease Verbosity ({0})", kb.getLabel()) :
+                nls.localize('decreaseVerbosity', "Decrease Verbosity")));
+        }
         if (!actionEnabled) {
             actionElement.classList.add('disabled');
             return store;
         }
         actionElement.classList.add('enabled');
-        const actionFunction = () => this.updateMarkdownHoverPartVerbosityLevel(action);
+        const actionFunction = () => this.updateFocusedHoverPartVerbosityLevel(action);
         store.add(new ClickAction(actionElement, actionFunction));
         store.add(new KeyDownAction(actionElement, actionFunction, [3 /* KeyCode.Enter */, 10 /* KeyCode.Space */]));
         return store;
     }
-    async updateMarkdownHoverPartVerbosityLevel(action, index = -1, focus = true) {
+    async updateFocusedHoverPartVerbosityLevel(action) {
         var _a;
         const model = this._editor.getModel();
         if (!model) {
             return;
         }
-        const indexOfInterest = index !== -1 ? index : this._focusedHoverPartIndex;
-        const hoverRenderedPart = this._getRenderedHoverPartAtIndex(indexOfInterest);
+        const hoverFocusedPartIndex = this._hoverFocusInfo.hoverPartIndex;
+        const hoverRenderedPart = this._getRenderedHoverPartAtIndex(hoverFocusedPartIndex);
         if (!hoverRenderedPart || !((_a = hoverRenderedPart.hoverSource) === null || _a === void 0 ? void 0 : _a.supportsVerbosityAction(action))) {
             return;
         }
-        const hoverSource = hoverRenderedPart.hoverSource;
-        const newHover = await this._fetchHover(hoverSource, model, action);
-        if (!newHover) {
-            return;
-        }
-        const newHoverSource = new HoverSource(newHover, hoverSource.hoverProvider, hoverSource.hoverPosition);
-        const newHoverRenderedPart = this._renderHoverPart(indexOfInterest, newHover.contents, newHoverSource, this._onFinishedRendering);
-        this._replaceRenderedHoverPartAtIndex(indexOfInterest, newHoverRenderedPart);
-        if (focus) {
-            this._focusOnHoverPartWithIndex(indexOfInterest);
-        }
-        this._onFinishedRendering();
-    }
-    markdownHoverContentAtIndex(index) {
-        var _a;
-        const hoverRenderedPart = this._getRenderedHoverPartAtIndex(index);
-        return (_a = hoverRenderedPart === null || hoverRenderedPart === void 0 ? void 0 : hoverRenderedPart.renderedMarkdown.innerText) !== null && _a !== void 0 ? _a : '';
-    }
-    doesMarkdownHoverAtIndexSupportVerbosityAction(index, action) {
-        var _a;
-        const hoverRenderedPart = this._getRenderedHoverPartAtIndex(index);
-        if (!hoverRenderedPart || !((_a = hoverRenderedPart.hoverSource) === null || _a === void 0 ? void 0 : _a.supportsVerbosityAction(action))) {
-            return false;
-        }
-        return true;
-    }
-    async _fetchHover(hoverSource, model, action) {
-        let verbosityDelta = action === HoverVerbosityAction.Increase ? 1 : -1;
-        const provider = hoverSource.hoverProvider;
-        const ongoingHoverOperation = this._ongoingHoverOperations.get(provider);
-        if (ongoingHoverOperation) {
-            ongoingHoverOperation.tokenSource.cancel();
-            verbosityDelta += ongoingHoverOperation.verbosityDelta;
-        }
-        const tokenSource = new CancellationTokenSource();
-        this._ongoingHoverOperations.set(provider, { verbosityDelta, tokenSource });
-        const context = { verbosityRequest: { verbosityDelta, previousHover: hoverSource.hover } };
-        let hover;
+        const hoverPosition = hoverRenderedPart.hoverSource.hoverPosition;
+        const hoverProvider = hoverRenderedPart.hoverSource.hoverProvider;
+        const hover = hoverRenderedPart.hoverSource.hover;
+        const hoverContext = { verbosityRequest: { action, previousHover: hover } };
+        let newHover;
         try {
-            hover = await Promise.resolve(provider.provideHover(model, hoverSource.hoverPosition, tokenSource.token, context));
+            newHover = await Promise.resolve(hoverProvider.provideHover(model, hoverPosition, CancellationToken.None, hoverContext));
         }
         catch (e) {
             onUnexpectedExternalError(e);
         }
-        tokenSource.dispose();
-        this._ongoingHoverOperations.delete(provider);
-        return hover;
+        if (!newHover) {
+            return;
+        }
+        const hoverSource = new HoverSource(newHover, hoverProvider, hoverPosition);
+        const renderedHoverPart = this._renderHoverPart(hoverFocusedPartIndex, newHover.contents, hoverSource, this._onFinishedRendering);
+        this._replaceRenderedHoverPartAtIndex(hoverFocusedPartIndex, renderedHoverPart);
+        this._focusOnHoverPartWithIndex(hoverFocusedPartIndex);
+        this._onFinishedRendering();
     }
     _replaceRenderedHoverPartAtIndex(index, renderedHoverPart) {
         if (index >= this._renderHoverParts.length || index < 0) {
@@ -326,6 +303,7 @@ class MarkdownRenderedHoverParts extends Disposable {
     }
     _focusOnHoverPartWithIndex(index) {
         this._renderedHoverParts[index].renderedMarkdown.focus();
+        this._hoverFocusInfo.focusRemains = true;
     }
     _getRenderedHoverPartAtIndex(index) {
         return this._renderedHoverParts[index];
@@ -358,20 +336,4 @@ function renderMarkdownInContainer(editor, container, markdownStrings, languageS
         container.appendChild(markdownHoverElement);
     }
     return store;
-}
-export function labelForHoverVerbosityAction(keybindingService, action) {
-    switch (action) {
-        case HoverVerbosityAction.Increase: {
-            const kb = keybindingService.lookupKeybinding(INCREASE_HOVER_VERBOSITY_ACTION_ID);
-            return kb ?
-                nls.localize('increaseVerbosityWithKb', "Increase Hover Verbosity ({0})", kb.getLabel()) :
-                nls.localize('increaseVerbosity', "Increase Hover Verbosity");
-        }
-        case HoverVerbosityAction.Decrease: {
-            const kb = keybindingService.lookupKeybinding(DECREASE_HOVER_VERBOSITY_ACTION_ID);
-            return kb ?
-                nls.localize('decreaseVerbosityWithKb', "Decrease Hover Verbosity ({0})", kb.getLabel()) :
-                nls.localize('decreaseVerbosity', "Decrease Hover Verbosity");
-        }
-    }
 }

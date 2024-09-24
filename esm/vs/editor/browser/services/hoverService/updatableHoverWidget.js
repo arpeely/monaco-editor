@@ -2,7 +2,6 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isMarkdownString } from '../../../../base/common/htmlContent.js';
 import { isFunction, isString } from '../../../../base/common/types.js';
@@ -24,7 +23,7 @@ export class UpdatableHoverWidget {
             return;
         }
         let resolvedContent;
-        if (content === undefined || isString(content) || isHTMLElement(content)) {
+        if (content === undefined || isString(content) || content instanceof HTMLElement) {
             resolvedContent = content;
         }
         else if (!isFunction(content.markdown)) {
@@ -34,7 +33,7 @@ export class UpdatableHoverWidget {
             // compute the content, potentially long-running
             // show 'Loading' if no hover is up yet
             if (!this._hoverWidget) {
-                this.show(localize('iconLabel.loading', "Loading..."), focus, options);
+                this.show(localize('iconLabel.loading', "Loading..."), focus);
             }
             // compute the content
             this._cancellationTokenSource = new CancellationTokenSource();

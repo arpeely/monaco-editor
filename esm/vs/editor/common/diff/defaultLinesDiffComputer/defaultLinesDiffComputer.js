@@ -56,7 +56,7 @@ export class DefaultLinesDiffComputer {
                         : 1 + Math.log(1 + modifiedLines[offset2].length)
                     : 0.99);
             }
-            return this.myersDiffingAlgorithm.compute(sequence1, sequence2, timeout);
+            return this.myersDiffingAlgorithm.compute(sequence1, sequence2);
         })();
         let lineAlignments = lineAlignmentResult.diffs;
         let hitTimeout = lineAlignmentResult.hitTimeout;

@@ -61,7 +61,6 @@ class MinimapOptions {
         this.minimapCharWidth = 1 /* Constants.BASE_CHAR_WIDTH */ * this.fontScale;
         this.sectionHeaderFontFamily = DEFAULT_FONT_FAMILY;
         this.sectionHeaderFontSize = minimapOpts.sectionHeaderFontSize * pixelRatio;
-        this.sectionHeaderLetterSpacing = minimapOpts.sectionHeaderLetterSpacing; // intentionally not multiplying by pixelRatio
         this.sectionHeaderFontColor = MinimapOptions._getSectionHeaderColor(theme, tokensColorTracker.getColor(1 /* ColorId.DefaultForeground */));
         this.charRenderer = createSingleCallFunction(() => MinimapCharRendererFactory.create(this.fontScale, fontInfo.fontFamily));
         this.defaultBackgroundColor = tokensColorTracker.getColor(2 /* ColorId.DefaultBackground */);
@@ -114,7 +113,6 @@ class MinimapOptions {
             && this.minimapLineHeight === other.minimapLineHeight
             && this.minimapCharWidth === other.minimapCharWidth
             && this.sectionHeaderFontSize === other.sectionHeaderFontSize
-            && this.sectionHeaderLetterSpacing === other.sectionHeaderLetterSpacing
             && this.defaultBackgroundColor && this.defaultBackgroundColor.equals(other.defaultBackgroundColor)
             && this.backgroundColor && this.backgroundColor.equals(other.backgroundColor)
             && this.foregroundAlpha === other.foregroundAlpha);
@@ -1352,7 +1350,6 @@ class InnerMinimap extends Disposable {
         var _a;
         const minimapLineHeight = this._model.options.minimapLineHeight;
         const sectionHeaderFontSize = this._model.options.sectionHeaderFontSize;
-        const sectionHeaderLetterSpacing = this._model.options.sectionHeaderLetterSpacing;
         const backgroundFillHeight = sectionHeaderFontSize * 1.5;
         const { canvasInnerWidth } = this._model.options;
         const backgroundColor = this._model.options.backgroundColor;
@@ -1361,8 +1358,7 @@ class InnerMinimap extends Disposable {
         const foregroundFill = `rgb(${foregroundColor.r} ${foregroundColor.g} ${foregroundColor.b})`;
         const separatorStroke = foregroundFill;
         const canvasContext = this._decorationsCanvas.domNode.getContext('2d');
-        canvasContext.letterSpacing = sectionHeaderLetterSpacing + 'px';
-        canvasContext.font = '500 ' + sectionHeaderFontSize + 'px ' + this._model.options.sectionHeaderFontFamily;
+        canvasContext.font = sectionHeaderFontSize + 'px ' + this._model.options.sectionHeaderFontFamily;
         canvasContext.strokeStyle = separatorStroke;
         canvasContext.lineWidth = 0.2;
         const decorations = this._model.getSectionHeaderDecorationsInViewport(layout.startLineNumber, layout.endLineNumber);

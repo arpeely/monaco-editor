@@ -64,16 +64,13 @@ export class ViewOverlayWidgets extends ViewPart {
         this.setShouldRender();
         this._updateMaxMinWidth();
     }
-    setWidgetPosition(widget, position) {
+    setWidgetPosition(widget, preference) {
         const widgetData = this._widgets[widget.getId()];
-        const preference = position ? position.preference : null;
-        const stack = position === null || position === void 0 ? void 0 : position.stackOridinal;
-        if (widgetData.preference === preference && widgetData.stack === stack) {
+        if (widgetData.preference === preference) {
             this._updateMaxMinWidth();
             return false;
         }
         widgetData.preference = preference;
-        widgetData.stack = stack;
         this.setShouldRender();
         this._updateMaxMinWidth();
         return true;
@@ -103,38 +100,24 @@ export class ViewOverlayWidgets extends ViewPart {
         }
         this._context.viewLayout.setOverlayWidgetsMinWidth(maxMinWidth);
     }
-    _renderWidget(widgetData, stackCoordinates) {
+    _renderWidget(widgetData) {
         const domNode = widgetData.domNode;
         if (widgetData.preference === null) {
             domNode.setTop('');
             return;
         }
-        const maxRight = (2 * this._verticalScrollbarWidth) + this._minimapWidth;
-        if (widgetData.preference === 0 /* OverlayWidgetPositionPreference.TOP_RIGHT_CORNER */ || widgetData.preference === 1 /* OverlayWidgetPositionPreference.BOTTOM_RIGHT_CORNER */) {
-            if (widgetData.preference === 1 /* OverlayWidgetPositionPreference.BOTTOM_RIGHT_CORNER */) {
-                const widgetHeight = domNode.domNode.clientHeight;
-                domNode.setTop((this._editorHeight - widgetHeight - 2 * this._horizontalScrollbarHeight));
-            }
-            else {
-                domNode.setTop(0);
-            }
-            if (widgetData.stack !== undefined) {
-                domNode.setTop(stackCoordinates[widgetData.preference]);
-                stackCoordinates[widgetData.preference] += domNode.domNode.clientWidth;
-            }
-            else {
-                domNode.setRight(maxRight);
-            }
+        if (widgetData.preference === 0 /* OverlayWidgetPositionPreference.TOP_RIGHT_CORNER */) {
+            domNode.setTop(0);
+            domNode.setRight((2 * this._verticalScrollbarWidth) + this._minimapWidth);
+        }
+        else if (widgetData.preference === 1 /* OverlayWidgetPositionPreference.BOTTOM_RIGHT_CORNER */) {
+            const widgetHeight = domNode.domNode.clientHeight;
+            domNode.setTop((this._editorHeight - widgetHeight - 2 * this._horizontalScrollbarHeight));
+            domNode.setRight((2 * this._verticalScrollbarWidth) + this._minimapWidth);
         }
         else if (widgetData.preference === 2 /* OverlayWidgetPositionPreference.TOP_CENTER */) {
+            domNode.setTop(0);
             domNode.domNode.style.right = '50%';
-            if (widgetData.stack !== undefined) {
-                domNode.setTop(stackCoordinates[2 /* OverlayWidgetPositionPreference.TOP_CENTER */]);
-                stackCoordinates[2 /* OverlayWidgetPositionPreference.TOP_CENTER */] += domNode.domNode.clientHeight;
-            }
-            else {
-                domNode.setTop(0);
-            }
         }
         else {
             const { top, left } = widgetData.preference;
@@ -159,11 +142,9 @@ export class ViewOverlayWidgets extends ViewPart {
     render(ctx) {
         this._domNode.setWidth(this._editorWidth);
         const keys = Object.keys(this._widgets);
-        const stackCoordinates = Array.from({ length: 2 /* OverlayWidgetPositionPreference.TOP_CENTER */ + 1 }, () => 0);
-        keys.sort((a, b) => (this._widgets[a].stack || 0) - (this._widgets[b].stack || 0));
         for (let i = 0, len = keys.length; i < len; i++) {
             const widgetId = keys[i];
-            this._renderWidget(this._widgets[widgetId], stackCoordinates);
+            this._renderWidget(this._widgets[widgetId]);
         }
     }
 }

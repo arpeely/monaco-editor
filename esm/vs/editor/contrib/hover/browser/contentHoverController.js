@@ -28,7 +28,6 @@ import { ContentHoverWidget } from './contentHoverWidget.js';
 import { ContentHoverComputer } from './contentHoverComputer.js';
 import { ContentHoverVisibleData, HoverResult } from './contentHoverTypes.js';
 import { EditorHoverStatusBar } from './contentHoverStatusBar.js';
-import { Emitter } from '../../../../base/common/event.js';
 let ContentHoverController = ContentHoverController_1 = class ContentHoverController extends Disposable {
     constructor(_editor, _instantiationService, _keybindingService) {
         super();
@@ -36,8 +35,6 @@ let ContentHoverController = ContentHoverController_1 = class ContentHoverContro
         this._instantiationService = _instantiationService;
         this._keybindingService = _keybindingService;
         this._currentResult = null;
-        this._onContentsChanged = this._register(new Emitter());
-        this.onContentsChanged = this._onContentsChanged.event;
         this._widget = this._register(this._instantiationService.createInstance(ContentHoverWidget, this._editor));
         // Instantiate participants and sort them by `hoverOrdinal` which is relevant for rendering order.
         this._participants = [];
@@ -180,7 +177,7 @@ let ContentHoverController = ContentHoverController_1 = class ContentHoverContro
             fragment,
             statusBar,
             setColorPicker: (widget) => colorPicker = widget,
-            onContentsChanged: () => this._doOnContentsChanged(),
+            onContentsChanged: () => this._widget.onContentsChanged(),
             setMinimumDimensions: (dimensions) => this._widget.setMinimumDimensions(dimensions),
             hide: () => this.hide()
         };
@@ -210,10 +207,6 @@ let ContentHoverController = ContentHoverController_1 = class ContentHoverContro
         else {
             disposables.dispose();
         }
-    }
-    _doOnContentsChanged() {
-        this._onContentsChanged.fire();
-        this._widget.onContentsChanged();
     }
     static computeHoverRanges(editor, anchorRange, messages) {
         let startColumnBoundary = 1;
@@ -283,17 +276,9 @@ let ContentHoverController = ContentHoverController_1 = class ContentHoverContro
     startShowingAtRange(range, mode, source, focus) {
         this._startShowingOrUpdateHover(new HoverRangeAnchor(0, range, undefined, undefined), mode, source, focus, null);
     }
-    async updateMarkdownHoverVerbosityLevel(action, index, focus) {
+    async updateFocusedMarkdownHoverVerbosityLevel(action) {
         var _a;
-        (_a = this._markdownHoverParticipant) === null || _a === void 0 ? void 0 : _a.updateMarkdownHoverVerbosityLevel(action, index, focus);
-    }
-    markdownHoverContentAtIndex(index) {
-        var _a, _b;
-        return (_b = (_a = this._markdownHoverParticipant) === null || _a === void 0 ? void 0 : _a.markdownHoverContentAtIndex(index)) !== null && _b !== void 0 ? _b : '';
-    }
-    doesMarkdownHoverAtIndexSupportVerbosityAction(index, action) {
-        var _a, _b;
-        return (_b = (_a = this._markdownHoverParticipant) === null || _a === void 0 ? void 0 : _a.doesMarkdownHoverAtIndexSupportVerbosityAction(index, action)) !== null && _b !== void 0 ? _b : false;
+        (_a = this._markdownHoverParticipant) === null || _a === void 0 ? void 0 : _a.updateFocusedMarkdownHoverPartVerbosityLevel(action);
     }
     containsNode(node) {
         return (node ? this._widget.getDomNode().contains(node) : false);

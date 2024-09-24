@@ -331,8 +331,7 @@ export class StickyScrollWidget extends Disposable {
     }
     getPosition() {
         return {
-            preference: 2 /* OverlayWidgetPositionPreference.TOP_CENTER */,
-            stackOridinal: 10,
+            preference: null
         };
     }
     getMinContentWidthInPx() {

@@ -84,7 +84,6 @@ let StandaloneQuickInputService = class StandaloneQuickInputService {
         }
         return quickInputService;
     }
-    get currentQuickInput() { return this.activeService.currentQuickInput; }
     get quickAccess() { return this.activeService.quickAccess; }
     constructor(instantiationService, codeEditorService) {
         this.instantiationService = instantiationService;

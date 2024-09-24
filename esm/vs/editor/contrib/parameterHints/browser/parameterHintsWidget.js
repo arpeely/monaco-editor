@@ -30,17 +30,14 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { listHighlightForeground, registerColor } from '../../../../platform/theme/common/colorRegistry.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
-import { StopWatch } from '../../../../base/common/stopwatch.js';
-import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 const $ = dom.$;
 const parameterHintsNextIcon = registerIcon('parameter-hints-next', Codicon.chevronDown, nls.localize('parameterHintsNextIcon', 'Icon for show next parameter hint.'));
 const parameterHintsPreviousIcon = registerIcon('parameter-hints-previous', Codicon.chevronUp, nls.localize('parameterHintsPreviousIcon', 'Icon for show previous parameter hint.'));
 let ParameterHintsWidget = ParameterHintsWidget_1 = class ParameterHintsWidget extends Disposable {
-    constructor(editor, model, contextKeyService, openerService, languageService, telemetryService) {
+    constructor(editor, model, contextKeyService, openerService, languageService) {
         super();
         this.editor = editor;
         this.model = model;
-        this.telemetryService = telemetryService;
         this.renderDisposeables = this._register(new DisposableStore());
         this.visible = false;
         this.announcedLabel = null;
@@ -219,7 +216,6 @@ let ParameterHintsWidget = ParameterHintsWidget_1 = class ParameterHintsWidget e
         this.domNodes.scrollbar.scanDomNode();
     }
     renderMarkdownDocs(markdown) {
-        const stopWatch = new StopWatch();
         const renderedContents = this.renderDisposeables.add(this.markdownRenderer.render(markdown, {
             asyncRenderCallback: () => {
                 var _a;
@@ -227,12 +223,6 @@ let ParameterHintsWidget = ParameterHintsWidget_1 = class ParameterHintsWidget e
             }
         }));
         renderedContents.element.classList.add('markdown-docs');
-        const renderDuration = stopWatch.elapsed();
-        if (renderDuration > 300) {
-            this.telemetryService.publicLog2('parameterHints.parseMarkdown', {
-                renderDuration
-            });
-        }
         return renderedContents;
     }
     hasDocs(signature, activeParameter) {
@@ -315,8 +305,7 @@ ParameterHintsWidget.ID = 'editor.widget.parameterHintsWidget';
 ParameterHintsWidget = ParameterHintsWidget_1 = __decorate([
     __param(2, IContextKeyService),
     __param(3, IOpenerService),
-    __param(4, ILanguageService),
-    __param(5, ITelemetryService)
+    __param(4, ILanguageService)
 ], ParameterHintsWidget);
 export { ParameterHintsWidget };
 registerColor('editorHoverWidget.highlightForeground', { dark: listHighlightForeground, light: listHighlightForeground, hcDark: listHighlightForeground, hcLight: listHighlightForeground }, nls.localize('editorHoverWidgetHighlightForeground', 'Foreground color of the active item in the parameter hint.'));

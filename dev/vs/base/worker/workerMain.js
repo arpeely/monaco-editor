@@ -1,6 +1,6 @@
 /*!-----------------------------------------------------------
  * Copyright (c) Microsoft Corporation. All rights reserved.
- * Version: 0.50.0(c321d0fbecb50ab8a5365fa1965476b0ae63fc87)
+ * Version: 0.49.0(383fdf3fc0e1e1a024068b8d0fd4f3dcbae74d04)
  * Released under the MIT license
  * https://github.com/microsoft/vscode/blob/main/LICENSE.txt
  *-----------------------------------------------------------*/
@@ -2447,7 +2447,7 @@ define(__m[7/*vs/base/common/arrays*/], __M([0/*require*/,1/*exports*/]), functi
      * @returns New array with all falsy values removed. The original array IS NOT modified.
      */
     function coalesce(array) {
-        return array.filter((e) => !!e);
+        return array.filter(e => !!e);
     }
     /**
      * Remove all falsy values from `array`. The original array IS modified.
@@ -5530,7 +5530,7 @@ define(__m[24/*vs/base/common/stopwatch*/], __M([0/*require*/,1/*exports*/]), fu
 define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/base/common/errors*/,20/*vs/base/common/functional*/,13/*vs/base/common/lifecycle*/,22/*vs/base/common/linkedList*/,24/*vs/base/common/stopwatch*/]), function (require, exports, errors_1, functional_1, lifecycle_1, linkedList_1, stopwatch_1) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.Relay = exports.EventBufferer = exports.EventMultiplexer = exports.MicrotaskEmitter = exports.DebounceEmitter = exports.PauseableEmitter = exports.createEventDeliveryQueue = exports.Emitter = exports.ListenerRefusalError = exports.ListenerLeakError = exports.EventProfiling = exports.Event = void 0;
+    exports.Relay = exports.EventBufferer = exports.EventMultiplexer = exports.MicrotaskEmitter = exports.DebounceEmitter = exports.PauseableEmitter = exports.createEventDeliveryQueue = exports.Emitter = exports.EventProfiling = exports.Event = void 0;
     // -----------------------------------------------------------------------------------------------------------------------
     // Uncomment the next line to print warnings whenever a listener is GC'ed without having been disposed. This is a LEAK.
     // -----------------------------------------------------------------------------------------------------------------------
@@ -6153,8 +6153,7 @@ define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/bas
     EventProfiling._idPool = 0;
     let _globalLeakWarningThreshold = -1;
     class LeakageMonitor {
-        constructor(_errorHandler, threshold, name = Math.random().toString(18).slice(2, 5)) {
-            this._errorHandler = _errorHandler;
+        constructor(threshold, name = Math.random().toString(18).slice(2, 5)) {
             this.threshold = threshold;
             this.name = name;
             this._warnCountdown = 0;
@@ -6178,38 +6177,28 @@ define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/bas
                 // only warn on first exceed and then every time the limit
                 // is exceeded by 50% again
                 this._warnCountdown = threshold * 0.5;
-                const [topStack, topCount] = this.getMostFrequentStack();
-                const message = `[${this.name}] potential listener LEAK detected, having ${listenerCount} listeners already. MOST frequent listener (${topCount}):`;
-                console.warn(message);
+                // find most frequent listener and print warning
+                let topStack;
+                let topCount = 0;
+                for (const [stack, count] of this._stacks) {
+                    if (!topStack || topCount < count) {
+                        topStack = stack;
+                        topCount = count;
+                    }
+                }
+                console.warn(`[${this.name}] potential listener LEAK detected, having ${listenerCount} listeners already. MOST frequent listener (${topCount}):`);
                 console.warn(topStack);
-                const error = new ListenerLeakError(message, topStack);
-                this._errorHandler(error);
             }
             return () => {
                 const count = (this._stacks.get(stack.value) || 0);
                 this._stacks.set(stack.value, count - 1);
             };
         }
-        getMostFrequentStack() {
-            if (!this._stacks) {
-                return undefined;
-            }
-            let topStack;
-            let topCount = 0;
-            for (const [stack, count] of this._stacks) {
-                if (!topStack || topCount < count) {
-                    topStack = [stack, count];
-                    topCount = count;
-                }
-            }
-            return topStack;
-        }
     }
     class Stacktrace {
         static create() {
             var _a;
-            const err = new Error();
-            return new Stacktrace((_a = err.stack) !== null && _a !== void 0 ? _a : '');
+            return new Stacktrace((_a = new Error().stack) !== null && _a !== void 0 ? _a : '');
         }
         constructor(value) {
             this.value = value;
@@ -6218,25 +6207,6 @@ define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/bas
             console.warn(this.value.split('\n').slice(2).join('\n'));
         }
     }
-    // error that is logged when going over the configured listener threshold
-    class ListenerLeakError extends Error {
-        constructor(message, stack) {
-            super(message);
-            this.name = 'ListenerLeakError';
-            this.stack = stack;
-        }
-    }
-    exports.ListenerLeakError = ListenerLeakError;
-    // SEVERE error that is logged when having gone way over the configured listener
-    // threshold so that the emitter refuses to accept more listeners
-    class ListenerRefusalError extends Error {
-        constructor(message, stack) {
-            super(message);
-            this.name = 'ListenerRefusalError';
-            this.stack = stack;
-        }
-    }
-    exports.ListenerRefusalError = ListenerRefusalError;
     class UniqueContainer {
         constructor(value) {
             this.value = value;
@@ -6287,14 +6257,12 @@ define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/bas
      */
     class Emitter {
         constructor(options) {
-            var _a, _b, _c, _d, _e, _f;
+            var _a, _b, _c, _d, _e;
             this._size = 0;
             this._options = options;
-            this._leakageMon = (_globalLeakWarningThreshold > 0 || ((_a = this._options) === null || _a === void 0 ? void 0 : _a.leakWarningThreshold))
-                ? new LeakageMonitor((_b = options === null || options === void 0 ? void 0 : options.onListenerError) !== null && _b !== void 0 ? _b : errors_1.onUnexpectedError, (_d = (_c = this._options) === null || _c === void 0 ? void 0 : _c.leakWarningThreshold) !== null && _d !== void 0 ? _d : _globalLeakWarningThreshold) :
-                undefined;
-            this._perfMon = ((_e = this._options) === null || _e === void 0 ? void 0 : _e._profName) ? new EventProfiling(this._options._profName) : undefined;
-            this._deliveryQueue = (_f = this._options) === null || _f === void 0 ? void 0 : _f.deliveryQueue;
+            this._leakageMon = _globalLeakWarningThreshold > 0 || ((_a = this._options) === null || _a === void 0 ? void 0 : _a.leakWarningThreshold) ? new LeakageMonitor((_c = (_b = this._options) === null || _b === void 0 ? void 0 : _b.leakWarningThreshold) !== null && _c !== void 0 ? _c : _globalLeakWarningThreshold) : undefined;
+            this._perfMon = ((_d = this._options) === null || _d === void 0 ? void 0 : _d._profName) ? new EventProfiling(this._options._profName) : undefined;
+            this._deliveryQueue = (_e = this._options) === null || _e === void 0 ? void 0 : _e.deliveryQueue;
         }
         dispose() {
             var _a, _b, _c, _d;
@@ -6333,14 +6301,9 @@ define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/bas
         get event() {
             var _a;
             (_a = this._event) !== null && _a !== void 0 ? _a : (this._event = (callback, thisArgs, disposables) => {
-                var _a, _b, _c, _d, _e, _f, _g;
-                if (this._leakageMon && this._size > this._leakageMon.threshold ** 2) {
-                    const message = `[${this._leakageMon.name}] REFUSES to accept new listeners because it exceeded its threshold by far (${this._size} vs ${this._leakageMon.threshold})`;
-                    console.warn(message);
-                    const tuple = (_a = this._leakageMon.getMostFrequentStack()) !== null && _a !== void 0 ? _a : ['UNKNOWN stack', -1];
-                    const error = new ListenerRefusalError(`${message}. HINT: Stack shows most frequent listener (${tuple[1]}-times)`, tuple[0]);
-                    const errorHandler = ((_b = this._options) === null || _b === void 0 ? void 0 : _b.onListenerError) || errors_1.onUnexpectedError;
-                    errorHandler(error);
+                var _a, _b, _c, _d, _e;
+                if (this._leakageMon && this._size > this._leakageMon.threshold * 3) {
+                    console.warn(`[${this._leakageMon.name}] REFUSES to accept new listeners because it exceeded its threshold by far`);
                     return lifecycle_1.Disposable.None;
                 }
                 if (this._disposed) {
@@ -6362,12 +6325,12 @@ define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/bas
                     contained.stack = stack !== null && stack !== void 0 ? stack : Stacktrace.create();
                 }
                 if (!this._listeners) {
-                    (_d = (_c = this._options) === null || _c === void 0 ? void 0 : _c.onWillAddFirstListener) === null || _d === void 0 ? void 0 : _d.call(_c, this);
+                    (_b = (_a = this._options) === null || _a === void 0 ? void 0 : _a.onWillAddFirstListener) === null || _b === void 0 ? void 0 : _b.call(_a, this);
                     this._listeners = contained;
-                    (_f = (_e = this._options) === null || _e === void 0 ? void 0 : _e.onDidAddFirstListener) === null || _f === void 0 ? void 0 : _f.call(_e, this);
+                    (_d = (_c = this._options) === null || _c === void 0 ? void 0 : _c.onDidAddFirstListener) === null || _d === void 0 ? void 0 : _d.call(_c, this);
                 }
                 else if (this._listeners instanceof UniqueContainer) {
-                    (_g = this._deliveryQueue) !== null && _g !== void 0 ? _g : (this._deliveryQueue = new EventDeliveryQueuePrivate());
+                    (_e = this._deliveryQueue) !== null && _e !== void 0 ? _e : (this._deliveryQueue = new EventDeliveryQueuePrivate());
                     this._listeners = [this._listeners, contained];
                 }
                 else {
@@ -6700,56 +6663,27 @@ define(__m[10/*vs/base/common/event*/], __M([0/*require*/,1/*exports*/,5/*vs/bas
      */
     class EventBufferer {
         constructor() {
-            this.data = [];
+            this.buffers = [];
         }
-        wrapEvent(event, reduce, initial) {
+        wrapEvent(event) {
             return (listener, thisArgs, disposables) => {
                 return event(i => {
-                    var _a;
-                    const data = this.data[this.data.length - 1];
-                    // Non-reduce scenario
-                    if (!reduce) {
-                        // Buffering case
-                        if (data) {
-                            data.buffers.push(() => listener.call(thisArgs, i));
-                        }
-                        else {
-                            // Not buffering case
-                            listener.call(thisArgs, i);
-                        }
-                        return;
+                    const buffer = this.buffers[this.buffers.length - 1];
+                    if (buffer) {
+                        buffer.push(() => listener.call(thisArgs, i));
                     }
-                    // Reduce scenario
-                    const reduceData = data;
-                    // Not buffering case
-                    if (!reduceData) {
-                        // TODO: Is there a way to cache this reduce call for all listeners?
-                        listener.call(thisArgs, reduce(initial, i));
-                        return;
-                    }
-                    // Buffering case
-                    (_a = reduceData.items) !== null && _a !== void 0 ? _a : (reduceData.items = []);
-                    reduceData.items.push(i);
-                    if (reduceData.buffers.length === 0) {
-                        // Include a single buffered function that will reduce all events when we're done buffering events
-                        data.buffers.push(() => {
-                            var _a;
-                            // cache the reduced result so that the value can be shared across all listeners
-                            (_a = reduceData.reducedResult) !== null && _a !== void 0 ? _a : (reduceData.reducedResult = initial
-                                ? reduceData.items.reduce(reduce, initial)
-                                : reduceData.items.reduce(reduce));
-                            listener.call(thisArgs, reduceData.reducedResult);
-                        });
+                    else {
+                        listener.call(thisArgs, i);
                     }
                 }, undefined, disposables);
             };
         }
         bufferEvents(fn) {
-            const data = { buffers: new Array() };
-            this.data.push(data);
+            const buffer = [];
+            this.buffers.push(buffer);
             const r = fn();
-            this.data.pop();
-            data.buffers.forEach(flush => flush());
+            this.buffers.pop();
+            buffer.forEach(flush => flush());
             return r;
         }
     }
@@ -9723,7 +9657,6 @@ define(__m[42/*vs/base/common/codiconsLibrary*/], __M([0/*require*/,1/*exports*/
         goToSearch: (0, codiconsUtil_1.register)('go-to-search', 0xec32),
         percentage: (0, codiconsUtil_1.register)('percentage', 0xec33),
         sortPercentage: (0, codiconsUtil_1.register)('sort-percentage', 0xec33),
-        attach: (0, codiconsUtil_1.register)('attach', 0xec34),
     };
 });
 
@@ -13214,7 +13147,7 @@ define(__m[52/*vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffCo
                             : 1 + Math.log(1 + modifiedLines[offset2].length)
                         : 0.99);
                 }
-                return this.myersDiffingAlgorithm.compute(sequence1, sequence2, timeout);
+                return this.myersDiffingAlgorithm.compute(sequence1, sequence2);
             })();
             let lineAlignments = lineAlignmentResult.diffs;
             let hitTimeout = lineAlignmentResult.hitTimeout;
@@ -15329,7 +15262,7 @@ define(__m[62/*vs/editor/common/services/findSectionHeaders*/], __M([0/*require*
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.findSectionHeaders = findSectionHeaders;
-    const markRegex = new RegExp('\\bMARK:\\s*(.*)$', 'd');
+    const markRegex = /\bMARK:\s*(.*)$/d;
     const trimDashesRegex = /^-+|-+$/g;
     /**
      * Find section headers in the model.

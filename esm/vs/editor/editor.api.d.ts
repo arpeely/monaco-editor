@@ -8742,6 +8742,10 @@ export namespace languages.json {
          */
         readonly allowComments?: boolean;
         /**
+         * If set, multilines are tolerated.
+         */
+        readonly allowMultilineStrings?: boolean;
+        /**
          * A list of known schemas and/or associations of schemas to file names.
          */
         readonly schemas?: {

@@ -90965,7 +90965,7 @@ define(__m[366/*vs/editor/contrib/inlineCompletions/browser/ghostTextWidget*/], 
         for (let i = 0, len = lines.length; i < len; i++) {
             const lineData = lines[i];
             const line = lineData.content;
-            sb.appendString('<div class="view-line');
+            sb.appendString('<div contenteditable="true" spellcheck="true" class="view-line');
             sb.appendString('" style="top:');
             sb.appendString(String(i * lineHeight));
             sb.appendString('px;width:1000000px;">');

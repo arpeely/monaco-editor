@@ -89058,7 +89058,7 @@ define(__m[688/*vs/editor/browser/widget/diffEditor/components/diffEditorViewZon
     }
     exports.RenderOptions = RenderOptions;
     function renderOriginalLine(viewLineIdx, lineTokens, decorations, hasCharChanges, mightContainNonBasicASCII, mightContainRTL, options, sb) {
-        sb.appendString('<div class="view-line');
+        sb.appendString('<div contenteditable="true" spellcheck="true" class="view-line');
         if (!hasCharChanges) {
             // No char changes
             sb.appendString(' char-delete');

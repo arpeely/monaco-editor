@@ -3586,6 +3586,15 @@ function validate(n, schema, validationResult, matchingSchemas) {
   }
 }
 
+var dictionary = null;
+
+function getDictionary() {
+  if (!dictionary) {
+    dictionary = new Typo("en_US", false, false, { dictionaryPath: "/src/assets/static/typo-js/" });
+  }
+  return dictionary;
+}
+
 function parse3(textDocument, config) {
   var problems = [];
   var lastProblemOffset = -1;
@@ -3595,7 +3604,7 @@ function parse3(textDocument, config) {
   var multilineStringRanges = [];
   var notSpelledCorrectly = [];
 
-  const dictionary = new Typo("en_US", false, false, { dictionaryPath: "/src/assets/static/typo-js/" })
+  const dictionary = getDictionary();
 
   function _scanNext() {
     while (true) {

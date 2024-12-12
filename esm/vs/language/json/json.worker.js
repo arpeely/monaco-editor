@@ -3620,25 +3620,27 @@ function parse3(textDocument, config) {
 
         var specialCharsBeforeLength = nonAlphaBefore.length > 0 ? nonAlphaBefore[0].length : 0;
         
-        var cumulativeLength = specialCharsBeforeLength;
-
-        var spellResults = words.reduce((acc, word, index) => {
-          if (isNaN(word) && !dictionary.check(word)) {
-            var wordStartPosition = scanner.getTokenOffset() + cumulativeLength + 1;
-            var wordEndPosition = wordStartPosition + word.length
-
-            acc.push({
-              word,
-              suggestions: [],
-              start: wordStartPosition,
-              end: wordEndPosition
-            });
-          }
-
-          cumulativeLength += word.length + (delimiters.length > index ? delimiters[index].length : 0);
-          
-          return acc;
-        }, []);
+        var { spellResults } = words.reduce(
+          (acc, word, index) => {
+            const { spellResults, cumulativeLength } = acc;
+        
+            if (isNaN(word) && !dictionary.check(word)) {
+              var wordStartPosition = scanner.getTokenOffset() + cumulativeLength + 1;
+              var wordEndPosition = wordStartPosition + word.length;
+        
+              spellResults.push({
+                word,
+                suggestions: [],
+                start: wordStartPosition,
+                end: wordEndPosition,
+              });
+            }
+        
+            acc.cumulativeLength += word.length + (delimiters.length > index ? delimiters[index].length : 0);
+            return acc;
+          },
+          { spellResults: [], cumulativeLength: specialCharsBeforeLength }
+        )
 
         spellResults.map((res)=> {
           notSpelledCorrectly.push({range: Range.create(textDocument.positionAt(res.start), textDocument.positionAt(res.end)), suggestions: res.suggestions, word: res.word});

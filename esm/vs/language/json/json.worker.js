@@ -5101,7 +5101,7 @@ var JSONValidation = (
             typoErrorMsg += ". Did you mean: " + c.suggestions.join(', ') + "?";
           }
           var message_3 = localize4('Typo', typoErrorMsg);
-          addProblem(Diagnostic.create(c.range, message_3, DiagnosticSeverity.Warning, ErrorCode.Typo));
+          addProblem(Diagnostic.create(c.range, message_3, DiagnosticSeverity.Info, ErrorCode.Typo));
         });
         return diagnostics;
       };

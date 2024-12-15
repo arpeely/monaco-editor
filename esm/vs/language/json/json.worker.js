@@ -2586,6 +2586,7 @@ var ErrorCode;
   ErrorCode2[ErrorCode2["DuplicateKey"] = 520] = "DuplicateKey";
   ErrorCode2[ErrorCode2["CommentNotPermitted"] = 521] = "CommentNotPermitted";
   ErrorCode2[ErrorCode2["SchemaResolveError"] = 768] = "SchemaResolveError";
+  ErrorCode2[ErrorCode2["Typo"] = 99999] = "Typo";
 })(ErrorCode || (ErrorCode = {}));
 var ClientCapabilities;
 (function(ClientCapabilities2) {

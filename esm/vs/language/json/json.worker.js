@@ -8,6 +8,7 @@
 
 // src/language/json/json.worker.ts
 import * as worker from "../../editor/editor.worker.js";
+import Typo from "typo-js";
 
 // node_modules/jsonc-parser/lib/esm/impl/scanner.js
 function createScanner(text, ignoreTrivia) {
@@ -2585,6 +2586,7 @@ var ErrorCode;
   ErrorCode2[ErrorCode2["DuplicateKey"] = 520] = "DuplicateKey";
   ErrorCode2[ErrorCode2["CommentNotPermitted"] = 521] = "CommentNotPermitted";
   ErrorCode2[ErrorCode2["SchemaResolveError"] = 768] = "SchemaResolveError";
+  ErrorCode2[ErrorCode2["Typo"] = 99999] = "Typo";
 })(ErrorCode || (ErrorCode = {}));
 var ClientCapabilities;
 (function(ClientCapabilities2) {
@@ -2940,7 +2942,7 @@ function contains2(node, offset, includeRightBound) {
 var JSONDocument = (
   /** @class */
   function() {
-    function JSONDocument2(root, syntaxErrors, comments, multilineStrings) {
+    function JSONDocument2(root, syntaxErrors, comments, multilineStrings, notSpelledCorrectly) {
       if (syntaxErrors === void 0) {
         syntaxErrors = [];
       }
@@ -2951,6 +2953,7 @@ var JSONDocument = (
       this.syntaxErrors = syntaxErrors;
       this.comments = comments;
       this.multilineStrings = multilineStrings;
+      this.notSpelledCorrectly = notSpelledCorrectly;
     }
     JSONDocument2.prototype.getNodeFromOffset = function(offset, includeRightBound) {
       if (includeRightBound === void 0) {
@@ -3583,6 +3586,16 @@ function validate(n, schema, validationResult, matchingSchemas) {
     }
   }
 }
+
+var dictionary = null;
+
+function getDictionary() {
+  if (!dictionary) {
+    dictionary = new Typo("en_US", false, false, { dictionaryPath: "/src/assets/static/typo-js/" });
+  }
+  return dictionary;
+}
+
 function parse3(textDocument, config) {
   var problems = [];
   var lastProblemOffset = -1;
@@ -3590,10 +3603,50 @@ function parse3(textDocument, config) {
   var scanner = createScanner2(text, false);
   var commentRanges = config && config.collectComments ? [] : void 0;
   var multilineStringRanges = [];
+  var notSpelledCorrectly = [];
+
+  const dictionary = getDictionary();
+
   function _scanNext() {
     while (true) {
       var token_1 = scanner.scan();
       _checkScanError();
+      var currentWord = text.substring(scanner.getTokenOffset(), scanner.getTokenOffset() + scanner.getTokenLength());
+      if (/^".*"$/.test(currentWord)) {
+        var wordWithoutQuotes = currentWord.slice(1, -1);
+
+        var words = wordWithoutQuotes.match(/[a-zA-Z]+/g) || [];
+        var nonAlphaBefore = wordWithoutQuotes.match(/^[^a-zA-Z]+/) || [];
+        var delimiters = wordWithoutQuotes.match(/(?<=[a-zA-Z])[^a-zA-Z]+(?=[a-zA-Z])/g) || [];
+
+        var specialCharsBeforeLength = nonAlphaBefore.length > 0 ? nonAlphaBefore[0].length : 0;
+        
+        var { spellResults } = words.reduce(
+          (acc, word, index) => {
+            const { spellResults, cumulativeLength } = acc;
+        
+            if (isNaN(word) && !dictionary.check(word)) {
+              var wordStartPosition = scanner.getTokenOffset() + cumulativeLength + 1;
+              var wordEndPosition = wordStartPosition + word.length;
+        
+              spellResults.push({
+                word,
+                suggestions: [],
+                start: wordStartPosition,
+                end: wordEndPosition,
+              });
+            }
+        
+            acc.cumulativeLength += word.length + (delimiters.length > index ? delimiters[index].length : 0);
+            return acc;
+          },
+          { spellResults: [], cumulativeLength: specialCharsBeforeLength }
+        )
+
+        spellResults.map((res)=> {
+          notSpelledCorrectly.push({range: Range.create(textDocument.positionAt(res.start), textDocument.positionAt(res.end)), suggestions: res.suggestions, word: res.word});
+        })
+      }
       switch (token_1) {
         case 10 /* StringLiteral */:
           if (scanner.getTokenLength() > 3 && text.substring(scanner.getTokenOffset(), scanner.getTokenOffset() + 3) === "\"\"\"") {
@@ -3882,7 +3935,7 @@ function parse3(textDocument, config) {
       _error(localize2("End of file expected", "End of file expected."), ErrorCode.Undefined);
     }
   }
-  return new JSONDocument(_root, problems, commentRanges, multilineStringRanges);
+  return new JSONDocument(_root, problems, commentRanges, multilineStringRanges, notSpelledCorrectly);
 }
 
 // node_modules/vscode-json-languageservice/lib/esm/utils/json.js
@@ -5043,6 +5096,14 @@ var JSONValidation = (
             addProblem(Diagnostic.create(c, message_2, DiagnosticSeverity.Error, ErrorCode.UnexpectedEndOfString));
           });
         }
+        jsonDocument.notSpelledCorrectly.forEach(function (c) {
+          let typoErrorMsg = '"' + c.word + '": Unknown word';
+          if (c.suggestions.length > 0) {
+            typoErrorMsg += ". Did you mean: " + c.suggestions.join(', ') + "?";
+          }
+          var message_3 = localize4('Typo', typoErrorMsg);
+          addProblem(Diagnostic.create(c.range, message_3, DiagnosticSeverity.Info, ErrorCode.Typo));
+        });
         return diagnostics;
       };
       if (schema) {
